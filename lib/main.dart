@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'drawing_story_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -672,13 +673,20 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () {},
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF7E57C2),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: const BorderSide(color: Color(0xFF7E57C2), width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DrawingStoryScreen(),
+                  ),
+                );
+              },
+    style: OutlinedButton.styleFrom(
+      foregroundColor: const Color(0xFF7E57C2),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      side: const BorderSide(color: Color(0xFF7E57C2), width: 1.5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
