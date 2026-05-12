@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
+import 'ai_result_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
 //  하이라이트 범위 모델
@@ -945,7 +946,18 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AIResultScreen(
+                          tale: widget.tale,
+                          taleBook: widget.taleBook,
+                          editedPageIndex: widget.selectedPageIndex,
+                        ),
+                      ),
+                    );
+                  },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF7E57C2),
                       foregroundColor: Colors.white,
