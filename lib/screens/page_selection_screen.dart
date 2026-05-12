@@ -71,7 +71,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
       ),
       child: Row(
         children: [
-          // 뒤로가기
           GestureDetector(
             onTap: () => Navigator.pop(context),
             child: Container(
@@ -85,7 +84,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          // 제목
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -104,10 +102,8 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
             ],
           ),
           const Spacer(),
-          // 스텝 인디케이터
           _buildStepIndicator(isTablet),
           const SizedBox(width: 16),
-          // 선택 가이드 버튼
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
@@ -146,15 +142,12 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
 
         return Row(
           children: [
-            // 스텝 원
             Container(
               width: 24, height: 24,
               decoration: BoxDecoration(
-                color: isDone
+                color: isDone || isCurrent
                     ? const Color(0xFF7E57C2)
-                    : isCurrent
-                        ? const Color(0xFF7E57C2)
-                        : Colors.grey[300],
+                    : Colors.grey[300],
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -176,18 +169,15 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight:
-                      isCurrent ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
                   color: isCurrent
                       ? const Color(0xFF7E57C2)
                       : Colors.grey[400],
                 ),
               ),
-            // 화살표
             if (index < steps.length - 1) ...[
               const SizedBox(width: 6),
-              Icon(Icons.arrow_forward,
-                  size: 14, color: Colors.grey[300]),
+              Icon(Icons.arrow_forward, size: 14, color: Colors.grey[300]),
               const SizedBox(width: 6),
             ],
           ],
@@ -214,7 +204,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
       ),
       child: Row(
         children: [
-          // 토끼 캐릭터
           Container(
             width: isTablet ? 60 : 50,
             height: isTablet ? 60 : 50,
@@ -226,7 +215,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                 size: 32, color: Color(0xFF7E57C2)),
           ),
           const SizedBox(width: 14),
-          // 안내 텍스트
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +238,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
               ],
             ),
           ),
-          // 힌트 텍스트
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -277,54 +264,61 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
     );
   }
 
-  // ── 페이지 그리드 ──
+  // ── 페이지 그리드 (Wrap으로 선택 시 카드 크게) ──
   Widget _buildGrid(bool isTablet) {
-    final columns = isTablet ? 10 : 4;
-
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14),
-      child: GridView.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          crossAxisSpacing: isTablet ? 10 : 8,
-          mainAxisSpacing: isTablet ? 10 : 8,
-          childAspectRatio: isTablet ? 0.75 : 0.7,
-        ),
-        itemCount: _currentPageItems.length,
-        itemBuilder: (context, index) {
+      child: Wrap(
+        spacing: isTablet ? 12 : 8,
+        runSpacing: isTablet ? 12 : 8,
+        children: List.generate(_currentPageItems.length, (index) {
           final actualIndex = _currentGridPage * _itemsPerPage + index;
           final page = _currentPageItems[index];
           final isSelected = _selectedPageIndex == actualIndex;
 
+          // 선택 시 카드 크기 커짐
+          final cardWidth = isSelected
+              ? (isTablet ? 180.0 : 150.0)
+              : (isTablet ? 130.0 : 105.0);
+          final cardHeight = isSelected
+              ? (isTablet ? 170.0 : 140.0)
+              : (isTablet ? 120.0 : 95.0);
+
           return GestureDetector(
             onTap: () => setState(() => _selectedPageIndex = actualIndex),
-            child: Column(
-              children: [
-                // 카드
-                Expanded(
-                  child: Stack(
-                    children: [
-                      // 이미지
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF7E57C2)
-                                : Colors.transparent,
-                            width: 2.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isSelected
-                                  ? const Color(0xFF7E57C2).withOpacity(0.3)
-                                  : Colors.black.withOpacity(0.06),
-                              blurRadius: isSelected ? 12 : 6,
-                            ),
-                          ],
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              width: cardWidth,
+              child: Column(
+                children: [
+                  // 카드 이미지
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    width: cardWidth,
+                    height: cardHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF7E57C2)
+                            : Colors.transparent,
+                        width: 2.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isSelected
+                              ? const Color(0xFF7E57C2).withOpacity(0.3)
+                              : Colors.black.withOpacity(0.06),
+                          blurRadius: isSelected ? 14 : 6,
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
                             page.imagePath,
                             fit: BoxFit.cover,
@@ -336,7 +330,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                                 child: Text(
                                   '${actualIndex + 1}',
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                     color: widget.tale.cardColor
                                         .withOpacity(0.5),
@@ -346,70 +340,70 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                             ),
                           ),
                         ),
-                      ),
-                      // 페이지 번호
-                      Positioned(
-                        top: 4, left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${actualIndex + 1}',
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF3D2C8D)),
+                        // 페이지 번호
+                        Positioned(
+                          top: 4, left: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${actualIndex + 1}',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF3D2C8D)),
+                            ),
                           ),
                         ),
-                      ),
-                      // 즐겨찾기
-                      Positioned(
-                        top: 4, right: 4,
-                        child: Icon(Icons.favorite_border,
-                            size: 16, color: Colors.white),
-                      ),
-                      // 선택 체크
-                      if (isSelected)
+                        // 즐겨찾기
                         Positioned(
                           top: 4, right: 4,
-                          child: Container(
-                            width: 22, height: 22,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF7E57C2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.check,
-                                size: 14, color: Colors.white),
-                          ),
+                          child: isSelected
+                              ? Container(
+                                  width: 22, height: 22,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF7E57C2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check,
+                                      size: 14, color: Colors.white),
+                                )
+                              : const Icon(Icons.favorite_border,
+                                  size: 16, color: Colors.white),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                // 장면 설명
-                Text(
-                  _getPageDescription(actualIndex),
-                  style: TextStyle(
-                      fontSize: isTablet ? 11 : 10,
-                      color: Colors.grey[600],
-                      height: 1.3),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  // 장면 설명
+                  Text(
+                    _getPageDescription(actualIndex),
+                    style: TextStyle(
+                        fontSize: isTablet ? 11 : 10,
+                        color: isSelected
+                            ? const Color(0xFF7E57C2)
+                            : Colors.grey[600],
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                        height: 1.3),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           );
-        },
+        }),
       ),
     );
   }
 
-  // ── 페이지 설명 텍스트 ──
   String _getPageDescription(int index) {
     final pages = widget.taleBook.pages;
     if (index < pages.length) {
@@ -433,9 +427,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
             child: Container(
               width: 32, height: 32,
               decoration: BoxDecoration(
-                color: _currentGridPage > 0
-                    ? Colors.white
-                    : Colors.grey[100],
+                color: _currentGridPage > 0 ? Colors.white : Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey[200]!),
               ),
@@ -500,7 +492,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
       ),
       child: Row(
         children: [
-          // 선택한 페이지 미리보기
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -514,7 +505,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  // 썸네일
                   Container(
                     width: 52, height: 52,
                     decoration: BoxDecoration(
@@ -544,7 +534,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                             color: Colors.grey, size: 24),
                   ),
                   const SizedBox(width: 12),
-                  // 설명
                   if (selectedPage != null)
                     SizedBox(
                       width: isTablet ? 200 : 140,
@@ -574,15 +563,14 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                   else
                     Text(
                       '페이지를 선택해주세요',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey[400]),
+                      style:
+                          TextStyle(fontSize: 13, color: Colors.grey[400]),
                     ),
                 ],
               ),
             ],
           ),
           const SizedBox(width: 16),
-          // 기억해주세요 힌트
           if (isTablet)
             Expanded(
               child: Container(
@@ -631,11 +619,9 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
               ),
             ),
           const Spacer(),
-          // 버튼들
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // 이 장면 선택하고 수정하기
               ElevatedButton(
                 onPressed: _selectedPageIndex != null ? () {} : null,
                 style: ElevatedButton.styleFrom(
@@ -662,7 +648,6 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              // 이전 단계로 돌아가기
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Row(
