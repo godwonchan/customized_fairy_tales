@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
+import 'page_selection_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
 //  동화 페이지 데이터 모델
@@ -695,7 +696,17 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
           const Spacer(),
           // 수정 모드로 가기 버튼
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PageSelectionScreen(
+                    tale: widget.tale,
+                    taleBook: _taleBook,
+                  ),
+                ),
+              );
+            },
             icon: const Icon(Icons.edit, size: 16),
             label: const Text('수정 모드로 가기'),
             style: ElevatedButton.styleFrom(
