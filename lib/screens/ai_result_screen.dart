@@ -31,7 +31,7 @@ class _AIResultScreenState extends State<AIResultScreen>
   late Animation<double> _fadeAnim;
   bool _isSaved = false;
 
-  // 샘플 재구성 결과 데이터
+  // 재구성된 결과 페이지
   late List<Map<String, String>> _resultPages;
 
   @override
@@ -50,8 +50,6 @@ class _AIResultScreenState extends State<AIResultScreen>
   }
 
   void _initResultPages() {
-    // 실제로는 AI API에서 받아오는 데이터
-    // 지금은 샘플 데이터로 표시
     _resultPages = widget.taleBook.pages.asMap().entries.map((entry) {
       final index = entry.key;
       final page = entry.value;
@@ -77,6 +75,25 @@ class _AIResultScreenState extends State<AIResultScreen>
     return index < titles.length ? titles[index] : '${index + 1}번째 이야기';
   }
 
+  // ── 재구성된 TaleBook 생성 ──
+  TaleBook _buildUpdatedTaleBook() {
+    final updatedPages = widget.taleBook.pages.asMap().entries.map((entry) {
+      final index = entry.key;
+      final page = entry.value;
+      return TalePage(
+        pageNumber: page.pageNumber,
+        imagePath: page.imagePath,
+        text: _resultPages[index]['text']!,
+        highlightText: page.highlightText,
+      );
+    }).toList();
+
+    return TaleBook(
+      tale: widget.tale,
+      pages: updatedPages,
+    );
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -95,18 +112,14 @@ class _AIResultScreenState extends State<AIResultScreen>
   }
 
   void _nextPage() {
-    if (_currentPage < _resultPages.length - 1) {
-      _goToPage(_currentPage + 1);
-    }
+    if (_currentPage < _resultPages.length - 1) _goToPage(_currentPage + 1);
   }
 
   void _prevPage() {
-    if (_currentPage > 0) {
-      _goToPage(_currentPage - 1);
-    }
+    if (_currentPage > 0) _goToPage(_currentPage - 1);
   }
 
-  // 저장하기
+  // ── 저장하기 ──
   void _saveToBookshelf() {
     setState(() => _isSaved = true);
     showDialog(
@@ -122,9 +135,7 @@ class _AIResultScreenState extends State<AIResultScreen>
               Container(
                 width: 64, height: 64,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFEDE7F6),
-                  shape: BoxShape.circle,
-                ),
+                    color: Color(0xFFEDE7F6), shape: BoxShape.circle),
                 child: const Icon(Icons.check,
                     size: 36, color: Color(0xFF7E57C2)),
               ),
@@ -161,7 +172,6 @@ class _AIResultScreenState extends State<AIResultScreen>
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        // 책장으로 이동 (나중에 연결)
                         Navigator.popUntil(
                             context, (route) => route.isFirst);
                       },
@@ -185,7 +195,7 @@ class _AIResultScreenState extends State<AIResultScreen>
     );
   }
 
-  // 다시 수정하기 → 페이지 선택으로
+  // ── 다시 만들기 → 원본으로 페이지 선택 ──
   void _goBackToEdit() {
     showDialog(
       context: context,
@@ -200,24 +210,21 @@ class _AIResultScreenState extends State<AIResultScreen>
               Container(
                 width: 64, height: 64,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFCE4EC),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.edit,
+                    color: Color(0xFFFCE4EC), shape: BoxShape.circle),
+                child: const Icon(Icons.refresh,
                     size: 32, color: Color(0xFFE91E63)),
               ),
               const SizedBox(height: 16),
-              const Text('다시 수정할까요?',
+              const Text('처음부터 다시 만들까요?',
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF3D2C8D))),
               const SizedBox(height: 8),
               Text(
-                '페이지 선택 화면으로 돌아가서\n다시 수정할 수 있어요!',
+                '원본 동화로 돌아가서\n처음부터 다시 수정할 수 있어요!',
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 14, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               const SizedBox(height: 24),
               Row(
@@ -230,8 +237,7 @@ class _AIResultScreenState extends State<AIResultScreen>
                         side: BorderSide(color: Colors.grey[300]!),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('취소'),
                     ),
@@ -241,7 +247,7 @@ class _AIResultScreenState extends State<AIResultScreen>
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        // 페이지 선택 화면으로 이동
+                        // 원본 동화로 페이지 선택 이동
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
@@ -257,11 +263,93 @@ class _AIResultScreenState extends State<AIResultScreen>
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         elevation: 0,
                       ),
-                      child: const Text('다시 수정하기'),
+                      child: const Text('다시 만들기'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── 더 수정하기 → 재구성된 동화로 페이지 선택 ──
+  void _goToMoreEdit() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64, height: 64,
+                decoration: const BoxDecoration(
+                    color: Color(0xFFEDE7F6), shape: BoxShape.circle),
+                child: const Icon(Icons.edit,
+                    size: 32, color: Color(0xFF7E57C2)),
+              ),
+              const SizedBox(height: 16),
+              const Text('더 수정할까요?',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3D2C8D))),
+              const SizedBox(height: 8),
+              Text(
+                '재구성된 동화에서\n추가로 수정할 수 있어요!',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey,
+                        side: BorderSide(color: Colors.grey[300]!),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('취소'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // 재구성된 동화로 페이지 선택 이동
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PageSelectionScreen(
+                              tale: widget.tale,
+                              taleBook: _buildUpdatedTaleBook(),
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7E57C2),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
+                      ),
+                      child: const Text('더 수정하기'),
                     ),
                   ),
                 ],
@@ -328,8 +416,7 @@ class _AIResultScreenState extends State<AIResultScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('06 그림으로 동화 만들기 – AI 재구성 결과',
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.grey[500])),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500])),
               Text(widget.tale.title,
                   style: TextStyle(
                       fontSize: isTablet ? 18 : 15,
@@ -338,7 +425,7 @@ class _AIResultScreenState extends State<AIResultScreen>
             ],
           ),
           const Spacer(),
-          // 다시 만들기 버튼 (튀게)
+          // 다시 만들기 버튼 (핑크-오렌지 그라데이션)
           GestureDetector(
             onTap: _goBackToEdit,
             child: Container(
@@ -361,8 +448,7 @@ class _AIResultScreenState extends State<AIResultScreen>
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.refresh_rounded,
-                      size: 16, color: Colors.white),
+                  Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
                   SizedBox(width: 6),
                   Text('다시 만들기',
                       style: TextStyle(
@@ -373,7 +459,42 @@ class _AIResultScreenState extends State<AIResultScreen>
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          // 더 수정하기 버튼 (보라색 그라데이션)
+          GestureDetector(
+            onTap: _goToMoreEdit,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF7E57C2), Color(0xFF9C27B0)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7E57C2).withOpacity(0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.edit, size: 16, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text('더 수정하기',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           // 공유하기 버튼
           _headerButton(Icons.share_outlined, '공유하기', () {}),
           const SizedBox(width: 8),
@@ -401,9 +522,7 @@ class _AIResultScreenState extends State<AIResultScreen>
               child: Row(
                 children: [
                   Icon(
-                    _isSaved
-                        ? Icons.bookmark
-                        : Icons.bookmark_border,
+                    _isSaved ? Icons.bookmark : Icons.bookmark_border,
                     size: 16,
                     color: _isSaved
                         ? const Color(0xFF7E57C2)
@@ -428,13 +547,11 @@ class _AIResultScreenState extends State<AIResultScreen>
     );
   }
 
-  Widget _headerButton(
-      IconData icon, String label, VoidCallback onTap) {
+  Widget _headerButton(IconData icon, String label, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -461,17 +578,9 @@ class _AIResultScreenState extends State<AIResultScreen>
       padding: const EdgeInsets.all(24),
       child: Row(
         children: [
-          // 왼쪽 — 이미지
-          Expanded(
-            flex: 55,
-            child: _buildImageArea(isTablet: true),
-          ),
+          Expanded(flex: 55, child: _buildImageArea(isTablet: true)),
           const SizedBox(width: 32),
-          // 오른쪽 — 텍스트
-          Expanded(
-            flex: 45,
-            child: _buildTextArea(isTablet: true),
-          ),
+          Expanded(flex: 45, child: _buildTextArea(isTablet: true)),
         ],
       ),
     );
@@ -497,22 +606,19 @@ class _AIResultScreenState extends State<AIResultScreen>
 
     return Stack(
       children: [
-        // 책 스타일 컨테이너
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.12),
-                blurRadius: 20,
-                offset: const Offset(4, 4),
-              ),
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 20,
+                  offset: const Offset(4, 4)),
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 6,
-                offset: const Offset(-2, -2),
-              ),
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(-2, -2)),
             ],
           ),
           child: ClipRRect(
@@ -539,15 +645,14 @@ class _AIResultScreenState extends State<AIResultScreen>
                   ),
                   child: Center(
                     child: Icon(Icons.auto_stories,
-                        size: 80,
-                        color: Colors.white.withOpacity(0.6)),
+                        size: 80, color: Colors.white.withOpacity(0.6)),
                   ),
                 ),
               ),
             ),
           ),
         ),
-        // AI 수정된 페이지 뱃지
+        // AI 재구성 뱃지
         if (_currentPage == widget.editedPageIndex)
           Positioned(
             top: 12, left: 12,
@@ -562,8 +667,7 @@ class _AIResultScreenState extends State<AIResultScreen>
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.auto_awesome,
-                      size: 12, color: Colors.white),
+                  Icon(Icons.auto_awesome, size: 12, color: Colors.white),
                   SizedBox(width: 4),
                   Text('AI 재구성',
                       style: TextStyle(
@@ -617,10 +721,9 @@ class _AIResultScreenState extends State<AIResultScreen>
                   ],
                 ),
                 child: Icon(Icons.chevron_right,
-                    color:
-                        _currentPage < _resultPages.length - 1
-                            ? const Color(0xFF7E57C2)
-                            : Colors.grey[300]),
+                    color: _currentPage < _resultPages.length - 1
+                        ? const Color(0xFF7E57C2)
+                        : Colors.grey[300]),
               ),
             ),
           ),
@@ -642,16 +745,14 @@ class _AIResultScreenState extends State<AIResultScreen>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4)),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 페이지 번호
             Row(
               children: [
                 Container(
@@ -670,7 +771,6 @@ class _AIResultScreenState extends State<AIResultScreen>
                   ),
                 ),
                 const Spacer(),
-                // AI 재구성 표시
                 if (_currentPage == widget.editedPageIndex)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -695,7 +795,6 @@ class _AIResultScreenState extends State<AIResultScreen>
               ],
             ),
             const SizedBox(height: 16),
-            // 제목
             Text(
               page['title']!,
               style: TextStyle(
@@ -705,7 +804,6 @@ class _AIResultScreenState extends State<AIResultScreen>
               ),
             ),
             const SizedBox(height: 16),
-            // 본문
             Expanded(
               child: SingleChildScrollView(
                 child: Text(
@@ -719,7 +817,6 @@ class _AIResultScreenState extends State<AIResultScreen>
               ),
             ),
             const SizedBox(height: 20),
-            // 페이지 이동 버튼
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -737,8 +834,7 @@ class _AIResultScreenState extends State<AIResultScreen>
                     onPressed: _nextPage,
                     icon: const Text('다음',
                         style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     label: const Icon(Icons.arrow_forward, size: 16),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF7E57C2),
@@ -751,14 +847,12 @@ class _AIResultScreenState extends State<AIResultScreen>
                     ),
                   )
                 else
-                  // 마지막 페이지
                   ElevatedButton.icon(
                     onPressed: _saveToBookshelf,
                     icon: const Icon(Icons.bookmark, size: 16),
                     label: const Text('책장에 저장하기',
                         style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF7E57C2),
                       foregroundColor: Colors.white,
@@ -806,7 +900,6 @@ class _AIResultScreenState extends State<AIResultScreen>
                 margin: const EdgeInsets.only(right: 8),
                 child: Stack(
                   children: [
-                    // 썸네일 이미지
                     Container(
                       width: isTablet ? 60 : 52,
                       height: isTablet ? 60 : 52,
@@ -821,10 +914,9 @@ class _AIResultScreenState extends State<AIResultScreen>
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF7E57C2)
-                                      .withOpacity(0.3),
-                                  blurRadius: 8,
-                                )
+                                    color: const Color(0xFF7E57C2)
+                                        .withOpacity(0.3),
+                                    blurRadius: 8)
                               ]
                             : [],
                       ),
@@ -849,16 +941,14 @@ class _AIResultScreenState extends State<AIResultScreen>
                         ),
                       ),
                     ),
-                    // AI 재구성 뱃지
                     if (isEdited)
                       Positioned(
                         top: 2, right: 2,
                         child: Container(
                           width: 16, height: 16,
                           decoration: const BoxDecoration(
-                            color: Color(0xFF7E57C2),
-                            shape: BoxShape.circle,
-                          ),
+                              color: Color(0xFF7E57C2),
+                              shape: BoxShape.circle),
                           child: const Icon(Icons.auto_awesome,
                               size: 10, color: Colors.white),
                         ),
