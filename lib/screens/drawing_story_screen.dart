@@ -1,7 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
-import 'package:flutter/rendering.dart';
-import 'dart:typed_data';
 
 // ═══════════════════════════════════════════════════════════════
 //  그림으로 동화 만들기 화면
@@ -410,7 +407,7 @@ class _DrawingStoryScreenState extends State<DrawingStoryScreen>
             scrollDirection: Axis.horizontal,
             shrinkWrap: true,
             itemCount: _colorPalette.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, index) {
               final color = _colorPalette[index];
               final isSelected = _selectedColor == color && !_isEraser;
