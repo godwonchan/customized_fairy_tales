@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'drawing_story_screen.dart';
+import 'tale_reading_screen.dart';
 
 class FairyTaleDetailScreen extends StatefulWidget {
   final FairyTale tale;
@@ -218,7 +219,14 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TaleReadingScreen(tale: tale),
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7E57C2),
                 foregroundColor: Colors.white,

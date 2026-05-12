@@ -67,7 +67,7 @@ class FairyTale {
 final List<FairyTale> sampleTales = [
   FairyTale(title: '빨간 망토', imagePath: 'red_riding_hood.jpeg', cardColor: const Color(0xFFFFCDD2), category: '고전 동화', description: '숲 속 마을에 사는 빨간 망토 소녀가 할머니에 선물을 전하러 가는 길에 늑대를 만나면서 벌어지는 이야기', theme: '용기, 지혜', ageRange: '5~9세', wordCount: '약 2,400자', isFavorite: false),
   FairyTale(title: '아기 돼지 삼 형제', imagePath: 'three_pigs.jpeg', cardColor: const Color(0xFFFFE0B2), category: '고전 동화', description: '세 마리 아기 돼지가 각자의 방법으로 집을 짓고 늑대로부터 살아남는 이야기', theme: '협동, 지혜', ageRange: '4~8세', wordCount: '약 1,800자', isFavorite: true),
-  FairyTale(title: '백설공주', imagePath: 'snow_white.jpeg', cardColor: const Color(0xFFE1F5FE), category: '고전 동화', description: '마음씨 착한 백설공주와 일곱 난쟁이, 그리고 질투에 사로잡힌 마녀의 이야기', theme: '선함, 우정', ageRange: '5~10세', wordCount: '약 3,000자', isFavorite: false),
+  FairyTale(title: '백설공주', imagePath: 'book_001_Snow_White/Snow_White_cover.png', cardColor: const Color(0xFFE1F5FE), category: '고전 동화', description: '마음씨 착한 백설공주와 일곱 난쟁이, 그리고 질투에 사로잡힌 마녀의 이야기', theme: '선함, 우정', ageRange: '5~10세', wordCount: '약 3,000자', isFavorite: false),
   FairyTale(title: '피노키오', imagePath: 'pinocchio.jpeg', cardColor: const Color(0xFFFFF9C4), category: '창작 동화', description: '나무로 만들어진 인형 피노키오가 진짜 사람이 되기 위해 모험을 떠나는 이야기', theme: '정직, 성장', ageRange: '6~10세', wordCount: '약 3,500자', isFavorite: true),
   FairyTale(title: '인어공주', imagePath: 'little_mermaid.jpeg', cardColor: const Color(0xFFE8EAF6), category: '고전 동화', description: '바닷속 인어공주가 인간 세계를 동경하며 사랑을 찾아 떠나는 아름다운 이야기', theme: '사랑, 희생', ageRange: '7~12세', wordCount: '약 4,000자', isFavorite: true),
   FairyTale(title: '신데렐라', imagePath: 'cinderella.jpeg', cardColor: const Color(0xFFF3E5F5), category: '고전 동화', description: '착하고 부지런한 신데렐라가 요정의 도움으로 왕자님을 만나게 되는 이야기', theme: '희망, 친절', ageRange: '5~10세', wordCount: '약 2,800자', isFavorite: true),
@@ -108,8 +108,8 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, animation, __) => FairyTaleDetailScreen(tale: tale),
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (_, animation, _) => FairyTaleDetailScreen(tale: tale),
+        transitionsBuilder: (_, animation, _, child) {
           return SlideTransition(
             position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero)
                 .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
@@ -194,7 +194,7 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: hPadding),
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final bool isSelected = _selectedCategoryIndex == index;
           return GestureDetector(
