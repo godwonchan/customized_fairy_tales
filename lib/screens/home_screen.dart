@@ -566,8 +566,8 @@ class _HomeScreenState extends State<HomeScreen>
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, animation, __) => const FairyTaleListScreen(),
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (_, animation, _) => const FairyTaleListScreen(),
+        transitionsBuilder: (_, animation, _, child) {
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1.0, 0.0),
