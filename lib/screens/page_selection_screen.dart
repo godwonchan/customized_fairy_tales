@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
+import 'scene_edit_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
 //  수정할 페이지 선택 화면
@@ -623,7 +624,20 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               ElevatedButton(
-                onPressed: _selectedPageIndex != null ? () {} : null,
+                onPressed: _selectedPageIndex != null
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SceneEditScreen(
+                            tale: widget.tale,
+                            taleBook: widget.taleBook,
+                            selectedPageIndex: _selectedPageIndex!,
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7E57C2),
                   foregroundColor: Colors.white,
