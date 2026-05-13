@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
+import 'providers/favorites_provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => FavoritesProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -16,7 +23,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'NotoSansKR',
         scaffoldBackgroundColor: const Color(0xFFF8F4FF),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB39DDB)),
+        colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFFB39DDB)),
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: CupertinoPageTransitionsBuilder(),
