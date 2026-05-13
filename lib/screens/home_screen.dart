@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'my_stories_screen.dart';
+import 'settings_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
 //  앱 전체 감싸는 메인 구조 (사이드바 + 콘텐츠)
@@ -516,8 +517,8 @@ class _HomeScreenState extends State<HomeScreen>
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, animation, __) => const FairyTaleListScreen(),
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (_, animation, _) => const FairyTaleListScreen(),
+        transitionsBuilder: (_, animation, _, child) {
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1.0, 0.0),
@@ -537,8 +538,8 @@ class _HomeScreenState extends State<HomeScreen>
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (_, animation, __) => const MyStoriesScreen(),
-        transitionsBuilder: (_, animation, __, child) {
+        pageBuilder: (_, animation, _) => const MyStoriesScreen(),
+        transitionsBuilder: (_, animation, _, child) {
           return SlideTransition(
             position: Tween<Offset>(
               begin: const Offset(1.0, 0.0),
@@ -553,37 +554,3 @@ class _HomeScreenState extends State<HomeScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  설정 화면 (placeholder)
-// ═══════════════════════════════════════════════════════════════
-
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.settings_rounded, size: 80, color: Colors.grey[300]),
-              const SizedBox(height: 16),
-              Text('설정',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[400])),
-              const SizedBox(height: 8),
-              Text('준비 중이에요!',
-                  style:
-                      TextStyle(fontSize: 14, color: Colors.grey[300])),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
