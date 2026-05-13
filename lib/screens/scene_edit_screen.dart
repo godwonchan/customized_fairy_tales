@@ -761,8 +761,9 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
           return GestureDetector(
             onTap: () {
               if (tool['label'] == '펜') setState(() => _isEraser = false);
-              if (tool['label'] == '지우개')
+              if (tool['label'] == '지우개') {
                 setState(() => _isEraser = true);
+              }
               if (tool['label'] == '되돌리기') _undo();
             },
             child: Container(
@@ -1117,7 +1118,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
                         .pages[widget.selectedPageIndex].imagePath,
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 160,
                       decoration: BoxDecoration(
                         color: widget.tale.cardColor,

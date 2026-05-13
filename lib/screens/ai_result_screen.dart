@@ -630,7 +630,7 @@ class _AIResultScreenState extends State<AIResultScreen>
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: isTablet ? double.infinity : 320,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   height: isTablet ? 400 : 320,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -925,7 +925,7 @@ class _AIResultScreenState extends State<AIResultScreen>
                         child: Image.asset(
                           page['imagePath']!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorBuilder: (_, _, _) => Container(
                             color: widget.tale.cardColor,
                             child: Center(
                               child: Text(

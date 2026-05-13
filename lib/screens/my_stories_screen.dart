@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/favorites_provider.dart';
+import 'fairy_tale_list_screen.dart';
 
 // ═══════════════════════════════════════════════════════════════
-//  나의 책장 데이터 모델
+//  나의 책장 - 내가 만든 이야기 데이터 모델
 // ═══════════════════════════════════════════════════════════════
 
 class MyStory {
@@ -10,8 +13,6 @@ class MyStory {
   final String imagePath;
   final String date;
   final String category;
-  final bool isFavorite;
-  final bool isMyStory; // 내가 만든 이야기 여부
 
   MyStory({
     required this.id,
@@ -19,12 +20,10 @@ class MyStory {
     required this.imagePath,
     required this.date,
     required this.category,
-    this.isFavorite = false,
-    this.isMyStory = true,
   });
 }
 
-// 샘플 데이터
+// 샘플 - 내가 만든 이야기 데이터
 final List<MyStory> sampleMyStories = [
   MyStory(
     id: '1',
@@ -32,8 +31,6 @@ final List<MyStory> sampleMyStories = [
     imagePath: 'assets/red_riding_hood.jpeg',
     date: '2024.06.10',
     category: '고전 동화',
-    isFavorite: true,
-    isMyStory: true,
   ),
   MyStory(
     id: '2',
@@ -41,8 +38,6 @@ final List<MyStory> sampleMyStories = [
     imagePath: 'assets/pinocchio.jpeg',
     date: '2024.06.09',
     category: '창작 동화',
-    isFavorite: false,
-    isMyStory: true,
   ),
   MyStory(
     id: '3',
@@ -50,8 +45,6 @@ final List<MyStory> sampleMyStories = [
     imagePath: 'assets/little_mermaid.jpeg',
     date: '2024.06.08',
     category: '고전 동화',
-    isFavorite: true,
-    isMyStory: true,
   ),
   MyStory(
     id: '4',
@@ -59,26 +52,6 @@ final List<MyStory> sampleMyStories = [
     imagePath: 'assets/cinderella.jpeg',
     date: '2024.06.07',
     category: '창작 동화',
-    isFavorite: false,
-    isMyStory: true,
-  ),
-  MyStory(
-    id: '5',
-    title: '백설공주와\n일곱 요정',
-    imagePath: 'assets/book_001_Snow_White/Snow_White_cover.png',
-    date: '2024.06.06',
-    category: '고전 동화',
-    isFavorite: true,
-    isMyStory: false,
-  ),
-  MyStory(
-    id: '6',
-    title: '숲속의 헨젤과\n그레텔',
-    imagePath: 'assets/hansel_gretel.jpeg',
-    date: '2024.06.05',
-    category: '고전 동화',
-    isFavorite: false,
-    isMyStory: false,
   ),
 ];
 
@@ -95,22 +68,11 @@ class MyStoriesScreen extends StatefulWidget {
 
 class _MyStoriesScreenState extends State<MyStoriesScreen>
     with SingleTickerProviderStateMixin {
-  int _selectedTab = 0; // 0: 전체, 1: 내가 만든 이야기, 2: 좋아하는 이야기
+  int _selectedTab = 0;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
   final List<String> _tabs = ['전체', '내가 만든 이야기', '좋아하는 이야기'];
-
-  List<MyStory> get _filteredStories {
-    switch (_selectedTab) {
-      case 1:
-        return sampleMyStories.where((s) => s.isMyStory).toList();
-      case 2:
-        return sampleMyStories.where((s) => s.isFavorite).toList();
-      default:
-        return sampleMyStories;
-    }
-  }
 
   @override
   void initState() {
@@ -133,6 +95,24 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
+    final favoritesProvider = context.watch<FavoritesProvider>();
+    final favoritesList = favoritesProvider.favorites;
+
+    // 탭별 데이터
+    final allItems = [
+      ...sampleMyStories.map((s) => _StoryItem.fromMyStory(s)),
+      ...favoritesList.map((t) => _StoryItem.fromFairyTale(t)),
+    ];
+    final myItems =
+        sampleMyStories.map((s) => _StoryItem.fromMyStory(s)).toList();
+    final favItems =
+        favoritesList.map((t) => _StoryItem.fromFairyTale(t)).toList();
+
+    final currentItems = _selectedTab == 0
+        ? allItems
+        : _selectedTab == 1
+            ? myItems
+            : favItems;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4FF),
@@ -144,9 +124,13 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
             children: [
               _buildHeader(context, isTablet),
               const SizedBox(height: 16),
-              _buildTabs(isTablet),
+              _buildTabs(isTablet, favoritesProvider),
               const SizedBox(height: 16),
-              Expanded(child: _buildStoryGrid(isTablet)),
+              Expanded(
+                child: currentItems.isEmpty
+                    ? _buildEmptyState()
+                    : _buildGrid(currentItems, isTablet),
+              ),
             ],
           ),
         ),
@@ -157,6 +141,9 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
   // ── 헤더 ──
   Widget _buildHeader(BuildContext context, bool isTablet) {
     final hPadding = isTablet ? 32.0 : 16.0;
+    final favCount =
+        context.watch<FavoritesProvider>().favorites.length;
+    final totalCount = sampleMyStories.length + favCount;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(hPadding, 16, hPadding, 0),
@@ -164,11 +151,11 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('07 나의 책장',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              style:
+                  TextStyle(fontSize: 12, color: Colors.grey[500])),
           const SizedBox(height: 8),
           Row(
             children: [
-              // 뒤로가기
               GestureDetector(
                 onTap: () => Navigator.maybePop(context),
                 child: Container(
@@ -197,7 +184,6 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                       color: const Color(0xFF3D2C8D),
                       letterSpacing: -0.5)),
               const Spacer(),
-              // 총 이야기 수
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 8),
@@ -216,7 +202,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                     const Icon(Icons.auto_stories,
                         size: 16, color: Color(0xFF7E57C2)),
                     const SizedBox(width: 6),
-                    Text('총 ${sampleMyStories.length}개의 이야기',
+                    Text('총 ${totalCount}개의 이야기',
                         style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF7E57C2),
@@ -232,8 +218,9 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
   }
 
   // ── 탭 ──
-  Widget _buildTabs(bool isTablet) {
+  Widget _buildTabs(bool isTablet, FavoritesProvider provider) {
     final hPadding = isTablet ? 32.0 : 16.0;
+    final favCount = provider.favorites.length;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: hPadding),
@@ -242,6 +229,9 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
           final index = entry.key;
           final label = entry.value;
           final isSelected = _selectedTab == index;
+
+          // 좋아하는 이야기 탭에 개수 뱃지
+          final showBadge = index == 2 && favCount > 0;
 
           return GestureDetector(
             onTap: () {
@@ -268,15 +258,44 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                   ),
                 ],
               ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: isTablet ? 14 : 13,
-                  fontWeight: isSelected
-                      ? FontWeight.w600
-                      : FontWeight.w400,
-                  color: isSelected ? Colors.white : Colors.grey[600],
-                ),
+              child: Row(
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: isTablet ? 14 : 13,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: isSelected
+                          ? Colors.white
+                          : Colors.grey[600],
+                    ),
+                  ),
+                  if (showBadge) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white.withOpacity(0.3)
+                            : const Color(0xFF7E57C2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$favCount',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           );
@@ -285,37 +304,34 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     );
   }
 
-  // ── 스토리 그리드 ──
-  Widget _buildStoryGrid(bool isTablet) {
+  // ── 그리드 ──
+  Widget _buildGrid(List<_StoryItem> items, bool isTablet) {
     final hPadding = isTablet ? 32.0 : 16.0;
     final columns = isTablet ? 4 : 2;
 
-    if (_filteredStories.isEmpty) {
-      return _buildEmptyState();
-    }
-
     return GridView.builder(
-      padding: EdgeInsets.symmetric(horizontal: hPadding, vertical: 4),
+      padding:
+          EdgeInsets.symmetric(horizontal: hPadding, vertical: 4),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columns,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
         childAspectRatio: isTablet ? 0.75 : 0.7,
       ),
-      itemCount: _filteredStories.length,
+      itemCount: items.length,
       itemBuilder: (context, index) =>
-          _buildStoryCard(_filteredStories[index], isTablet),
+          _buildStoryCard(items[index], isTablet),
     );
   }
 
   // ── 스토리 카드 ──
-  Widget _buildStoryCard(MyStory story, bool isTablet) {
+  Widget _buildStoryCard(_StoryItem item, bool isTablet) {
     return GestureDetector(
       onTap: () {
-        // 동화 읽기로 이동 (나중에 연결)
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${story.title.replaceAll('\n', ' ')} 읽기'),
+            content: Text(
+                '${item.title.replaceAll('\n', ' ')} 읽기'),
             duration: const Duration(seconds: 1),
           ),
         );
@@ -334,7 +350,6 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 이미지
             Expanded(
               child: Stack(
                 children: [
@@ -342,7 +357,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                     borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(16)),
                     child: Image.asset(
-                      story.imagePath,
+                      item.imagePath,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
@@ -367,7 +382,28 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                       ),
                     ),
                   ),
-                  // 더보기 버튼
+                  // 뱃지
+                  Positioned(
+                    top: 8, left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: item.isMyStory
+                            ? const Color(0xFF7E57C2)
+                            : const Color(0xFFE91E63),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        item.isMyStory ? '내 작품' : '즐겨찾기',
+                        style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  // 하트
                   Positioned(
                     top: 8, right: 8,
                     child: Container(
@@ -376,39 +412,27 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                         color: Colors.white.withOpacity(0.85),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.more_vert,
-                          size: 16, color: Colors.grey[600]),
-                    ),
-                  ),
-                  // 내가 만든 이야기 뱃지
-                  if (story.isMyStory)
-                    Positioned(
-                      top: 8, left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF7E57C2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('내 작품',
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600)),
+                      child: Icon(
+                        item.isMyStory
+                            ? Icons.more_vert
+                            : Icons.favorite,
+                        size: 16,
+                        color: item.isMyStory
+                            ? Colors.grey[600]
+                            : const Color(0xFFE91E63),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
-            // 제목 + 날짜
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    story.title,
+                    item.title,
                     style: TextStyle(
                       fontSize: isTablet ? 14 : 12,
                       fontWeight: FontWeight.w600,
@@ -420,7 +444,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    story.date,
+                    item.category,
                     style: TextStyle(
                         fontSize: 11, color: Colors.grey[400]),
                   ),
@@ -435,17 +459,30 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
 
   // ── 빈 상태 ──
   Widget _buildEmptyState() {
+    final messages = [
+      '동화를 탐색하고 즐겨찾기를 추가해보세요!',
+      '아직 만든 이야기가 없어요!\nAI로 나만의 동화를 만들어보세요 😊',
+      '동화 목록에서 하트를 눌러\n좋아하는 동화를 추가해보세요 💜',
+    ];
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.auto_stories,
-              size: 80, color: Colors.grey[300]),
+          Icon(
+            _selectedTab == 2
+                ? Icons.favorite_border
+                : Icons.auto_stories,
+            size: 80,
+            color: Colors.grey[300],
+          ),
           const SizedBox(height: 16),
           Text(
             _selectedTab == 1
                 ? '아직 만든 이야기가 없어요!'
-                : '좋아하는 이야기가 없어요!',
+                : _selectedTab == 2
+                    ? '좋아하는 이야기가 없어요!'
+                    : '이야기가 없어요!',
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -453,11 +490,41 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            '동화를 재구성해서 나만의 이야기를 만들어보세요 😊',
+            messages[_selectedTab],
+            textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: Colors.grey[300]),
           ),
         ],
       ),
     );
   }
+}
+
+// ── 통합 아이템 모델 ──
+class _StoryItem {
+  final String title;
+  final String imagePath;
+  final String category;
+  final bool isMyStory;
+
+  _StoryItem({
+    required this.title,
+    required this.imagePath,
+    required this.category,
+    required this.isMyStory,
+  });
+
+  factory _StoryItem.fromMyStory(MyStory s) => _StoryItem(
+        title: s.title,
+        imagePath: s.imagePath,
+        category: s.category,
+        isMyStory: true,
+      );
+
+  factory _StoryItem.fromFairyTale(FairyTale t) => _StoryItem(
+        title: t.title,
+        imagePath: 'assets/${t.imagePath}',
+        category: t.category,
+        isMyStory: false,
+      );
 }
