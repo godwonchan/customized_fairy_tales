@@ -325,7 +325,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                             fit: BoxFit.cover,
                             width: double.infinity,
                             height: double.infinity,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               color: widget.tale.cardColor,
                               child: Center(
                                 child: Text(
@@ -520,7 +520,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                             child: Image.asset(
                               selectedPage.imagePath,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
+                              errorBuilder: (_, _, _) => Center(
                                 child: Text(
                                   '${(_selectedPageIndex! + 1)}',
                                   style: const TextStyle(

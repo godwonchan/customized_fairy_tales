@@ -602,7 +602,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                             child: Image.asset(
                               page.imagePath,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 color: widget.tale.cardColor,
                                 child: Center(
                                   child: Text(

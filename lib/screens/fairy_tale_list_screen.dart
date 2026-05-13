@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_detail_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/favorites_provider.dart';
 
 // ───────────────────────── 화면 크기 헬퍼 ─────────────────────────
 
@@ -95,8 +97,13 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
     super.dispose();
   }
 
-  void _toggleFavorite(int index) {
-    setState(() => _tales[index].isFavorite = !_tales[index].isFavorite);
+ void _toggleFavorite(int index) {
+    final provider = Provider.of<FavoritesProvider>(
+        context, listen: false);
+    provider.toggleFavorite(_tales[index]);
+    setState(() {
+      _tales[index].isFavorite = !_tales[index].isFavorite;
+    });
   }
 
   void _onSearch(String value) {
@@ -269,7 +276,9 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
                           child: Container(
                             width: isTablet ? 36 : 30, height: isTablet ? 36 : 30,
                             decoration: BoxDecoration(color: Colors.white.withOpacity(0.85), shape: BoxShape.circle),
-                            child: Icon(tale.isFavorite ? Icons.favorite : Icons.favorite_border,
+                            child: Icon(context.watch<FavoritesProvider>().isFavorite(tale)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
                               size: isTablet ? 20 : 16,
                               color: tale.isFavorite ? const Color(0xFFE91E63) : Colors.grey[400]),
                           ),
