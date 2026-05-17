@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # flutter_application_1
+=======
+# fairytale_app
+>>>>>>> 02c0cf69820b95c4cf704bd402ef65d5f05fe9e9
 
 A new Flutter project.
 
