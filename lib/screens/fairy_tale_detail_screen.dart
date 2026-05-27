@@ -1,0 +1,362 @@
+import 'package:flutter/material.dart';
+import 'fairy_tale_list_screen.dart';
+import 'drawing_story_screen.dart';
+import 'tale_reading_screen.dart';
+
+class FairyTaleDetailScreen extends StatefulWidget {
+  final FairyTale tale;
+
+  const FairyTaleDetailScreen({super.key, required this.tale});
+
+  @override
+  State<FairyTaleDetailScreen> createState() => _FairyTaleDetailScreenState();
+}
+
+class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+  late bool _isFavorite;
+
+  @override
+  void initState() {
+    super.initState();
+    _isFavorite = widget.tale.isFavorite;
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isTablet = ScreenSize.isTablet(context);
+    final tale = widget.tale;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F4FF),
+      body: SafeArea(
+        child: isTablet
+            ? _buildTabletLayout(context, tale)
+            : _buildPhoneLayout(context, tale),
+      ),
+    );
+  }
+
+  // ── 태블릿 레이아웃 (좌우 분할) ──
+  Widget _buildTabletLayout(BuildContext context, FairyTale tale) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: Hero(
+            tag: 'tale_${tale.title}',
+            child: Container(
+              margin: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                color: tale.cardColor,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/${tale.imagePath}',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Center(
+                    child: Icon(Icons.auto_stories, size: 120,
+                        color: tale.cardColor.withOpacity(0.4)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 5,
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: SlideTransition(
+              position: _slideAnim,
+              child: _buildInfoPanel(context, tale, isTablet: true),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── 폰 레이아웃 (상하 분할) ──
+  Widget _buildPhoneLayout(BuildContext context, FairyTale tale) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              Hero(
+                tag: 'tale_${tale.title}',
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 260,
+                  child: Image.asset(
+                    'assets/${tale.imagePath}',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: tale.cardColor,
+                      child: Center(
+                        child: Icon(Icons.auto_stories, size: 100,
+                            color: tale.cardColor.withOpacity(0.4)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(top: 12, left: 16, child: _backButton()),
+              Positioned(top: 12, right: 16, child: _favoriteButton()),
+            ],
+          ),
+          FadeTransition(
+            opacity: _fadeAnim,
+            child: SlideTransition(
+              position: _slideAnim,
+              child: _buildInfoPanel(context, tale, isTablet: false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 공통 정보 패널 ──
+  Widget _buildInfoPanel(BuildContext context, FairyTale tale,
+      {required bool isTablet}) {
+    return Padding(
+      padding: EdgeInsets.all(isTablet ? 32 : 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isTablet) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [_backButton(), _favoriteButton()],
+            ),
+            const SizedBox(height: 24),
+          ],
+          Text('03 동화 상세',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          const SizedBox(height: 12),
+          Text(
+            tale.title,
+            style: TextStyle(
+              fontSize: isTablet ? 32 : 24,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF3D2C8D),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDE7F6),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              tale.category,
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF7E57C2),
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            tale.description,
+            style: TextStyle(
+                fontSize: isTablet ? 16 : 14,
+                color: Colors.grey[700],
+                height: 1.7),
+          ),
+          const SizedBox(height: 24),
+          // 정보 카드
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2))
+              ],
+            ),
+            child: Row(
+              children: [
+                _infoItem('주제', tale.theme),
+                _divider(),
+                _infoItem('권장 연령', tale.ageRange),
+                _divider(),
+                _infoItem('글자 수', tale.wordCount),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          // 이 동화로 재구성하기 버튼
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TaleReadingScreen(tale: tale),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7E57C2),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: Text('이 동화로 재구성하기',
+                  style: TextStyle(
+                      fontSize: isTablet ? 17 : 15,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 그림으로 동화 만들기 버튼
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DrawingStoryScreen(),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF7E57C2),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(
+                    color: Color(0xFF7E57C2), width: 1.5),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('그림으로 동화 만들기',
+                      style: TextStyle(
+                          fontSize: isTablet ? 17 : 15,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7E57C2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('NEW',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _backButton() {
+    return GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Container(
+        width: 36, height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: const Icon(Icons.chevron_left,
+            color: Color(0xFF7E57C2), size: 22),
+      ),
+    );
+  }
+
+  Widget _favoriteButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _isFavorite = !_isFavorite),
+      child: Container(
+        width: 36, height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Icon(
+          _isFavorite ? Icons.favorite : Icons.favorite_border,
+          size: 18,
+          color: _isFavorite
+              ? const Color(0xFFE91E63)
+              : Colors.grey[400],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoItem(String label, String value) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          const SizedBox(height: 4),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3D2C8D))),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() {
+    return Container(width: 1, height: 32, color: Colors.grey[200]);
+  }
+}
