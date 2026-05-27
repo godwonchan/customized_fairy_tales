@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'fairy_tale_list_screen.dart';
 import 'page_selection_screen.dart';
+
 // ═══════════════════════════════════════════════════════════════
 //  동화 페이지 데이터 모델
 // ═══════════════════════════════════════════════════════════════
@@ -52,8 +54,9 @@ TaleBook getTaleBook(FairyTale tale) {
     )),
   );
 }
+
 // ═══════════════════════════════════════════════════════════════
-//  동화 읽기 화면 (오디오 플레이어 포함)
+//  동화 읽기 화면 (TTS 오디오 포함)
 // ═══════════════════════════════════════════════════════════════
 
 class TaleReadingScreen extends StatefulWidget {
@@ -79,13 +82,15 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
   bool _isFavorite = false;
 
   // ── 오디오 상태 ──
+  final FlutterTts _flutterTts = FlutterTts();
   bool _isPlaying = false;
   bool _autoNextPage = true;
   double _volume = 0.7;
-  double _progress = 0.18;
-  double _totalDuration = 165.0;
-  double _currentPosition = 18.0;
+  double _progress = 0.0;
+  double _totalDuration = 0.0;
+  double _currentPosition = 0.0;
   double _fontSize = 15.0;
+  double _speechRate = 0.5;
 
   @override
   void initState() {
@@ -101,18 +106,62 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
     _fadeAnim =
         CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+    _initTts();
+  }
+
+  // ── TTS 초기화 ──
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage('ko-KR');
+    await _flutterTts.setSpeechRate(_speechRate);
+    await _flutterTts.setVolume(_volume);
+    await _flutterTts.setPitch(1.0);
+
+    // 재생 완료 시
+    _flutterTts.setCompletionHandler(() {
+      setState(() {
+        _isPlaying = false;
+        _progress = 1.0;
+      });
+      // 자동 넘김 켜져 있으면 다음 페이지로
+      if (_autoNextPage && _currentPage < _taleBook.totalPages - 1) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _nextPage();
+          _togglePlay();
+        });
+      }
+    });
+
+    // 진행 상태 업데이트
+    _flutterTts.setProgressHandler(
+        (String text, int startOffset, int endOffset, String word) {
+      if (_totalDuration > 0) {
+        setState(() {
+          _progress = endOffset / text.length;
+          _currentPosition = _progress * _totalDuration;
+        });
+      }
+    });
+
+    // 에러 처리
+    _flutterTts.setErrorHandler((msg) {
+      setState(() => _isPlaying = false);
+    });
   }
 
   @override
   void dispose() {
+    _flutterTts.stop();
     _animController.dispose();
     super.dispose();
   }
 
+  // ── 페이지 이동 ──
   void _goToPage(int index) {
     if (index < 0 || index >= _taleBook.totalPages) return;
+    _flutterTts.stop();
     setState(() {
       _currentPage = index;
+      _isPlaying = false;
       _progress = 0.0;
       _currentPosition = 0.0;
     });
@@ -121,7 +170,27 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
 
   void _nextPage() => _goToPage(_currentPage + 1);
   void _prevPage() => _goToPage(_currentPage - 1);
-  void _togglePlay() => setState(() => _isPlaying = !_isPlaying);
+
+  // ── 재생/일시정지 ──
+  Future<void> _togglePlay() async {
+    if (_isPlaying) {
+      await _flutterTts.pause();
+      setState(() => _isPlaying = false);
+    } else {
+      final page = _taleBook.pages[_currentPage];
+      final text = page.highlightText != null
+          ? '${page.text} ${page.highlightText}'
+          : page.text;
+
+      // 텍스트 길이 기반 예상 시간 계산
+      _totalDuration = (text.length / 5) / _speechRate;
+
+      await _flutterTts.setVolume(_volume);
+      await _flutterTts.setSpeechRate(_speechRate);
+      await _flutterTts.speak(text);
+      setState(() => _isPlaying = true);
+    }
+  }
 
   String _formatTime(double seconds) {
     final m = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -169,7 +238,10 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              _flutterTts.stop();
+              Navigator.pop(context);
+            },
             child: Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
@@ -208,7 +280,43 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
             ],
           ),
           const Spacer(),
-          _headerBtn(Icons.volume_up_rounded, '읽어주기', _togglePlay),
+          // 읽어주기 버튼 (재생 상태 표시)
+          GestureDetector(
+            onTap: _togglePlay,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isPlaying
+                    ? const Color(0xFF7E57C2)
+                    : const Color(0xFFF8F4FF),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE0D7F5)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isPlaying
+                        ? Icons.pause_rounded
+                        : Icons.volume_up_rounded,
+                    size: 16,
+                    color: _isPlaying
+                        ? Colors.white
+                        : const Color(0xFF7E57C2),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _isPlaying ? '일시정지' : '읽어주기',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _isPlaying
+                            ? Colors.white
+                            : const Color(0xFF7E57C2),
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
           _headerBtn(Icons.list_rounded, '목차', () {}),
           const SizedBox(width: 8),
@@ -377,7 +485,6 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 페이지 번호 + 아이콘
             Row(
               children: [
                 Container(
@@ -396,16 +503,12 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                   ),
                 ),
                 const Spacer(),
-                Icon(Icons.list_rounded,
-                    size: 22, color: Colors.grey[400]),
+                Icon(Icons.list_rounded, size: 22, color: Colors.grey[400]),
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _isFavorite = !_isFavorite),
+                  onTap: () => setState(() => _isFavorite = !_isFavorite),
                   child: Icon(
-                    _isFavorite
-                        ? Icons.favorite
-                        : Icons.favorite_border,
+                    _isFavorite ? Icons.favorite : Icons.favorite_border,
                     size: 22,
                     color: _isFavorite
                         ? const Color(0xFFE91E63)
@@ -415,7 +518,6 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
               ],
             ),
             const SizedBox(height: 14),
-            // 제목
             Text(
               widget.tale.title,
               style: TextStyle(
@@ -425,7 +527,6 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
               ),
             ),
             const SizedBox(height: 14),
-            // 본문
             Text(
               page.text,
               style: TextStyle(
@@ -434,7 +535,6 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                 height: 1.8,
               ),
             ),
-            // 말풍선
             if (page.highlightText != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -448,8 +548,13 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.volume_up,
-                        size: 16, color: Color(0xFFFF8F00)),
+                    Icon(
+                      _isPlaying
+                          ? Icons.volume_up
+                          : Icons.volume_up_outlined,
+                      size: 16,
+                      color: const Color(0xFFFF8F00),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -467,10 +572,8 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
               ),
             ],
             const SizedBox(height: 20),
-            // 오디오 플레이어
             _buildAudioPlayer(isTablet),
             const SizedBox(height: 16),
-            // 다음 페이지 버튼
             if (_currentPage < _taleBook.totalPages - 1)
               SizedBox(
                 width: double.infinity,
@@ -532,9 +635,9 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                       color: Color(0xFF3D2C8D))),
               const Spacer(),
               Text('자동 넘김:',
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.grey[500])),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
               const SizedBox(width: 6),
+              // 자동 넘김 토글
               GestureDetector(
                 onTap: () =>
                     setState(() => _autoNextPage = !_autoNextPage),
@@ -564,7 +667,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
             ],
           ),
           const SizedBox(height: 12),
-          // 볼륨 + 컨트롤
+          // 볼륨 + 컨트롤 버튼
           Row(
             children: [
               Icon(Icons.volume_up, size: 18, color: Colors.grey[500]),
@@ -583,7 +686,10 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                   child: Slider(
                     value: _volume,
                     min: 0, max: 1,
-                    onChanged: (v) => setState(() => _volume = v),
+                    onChanged: (v) {
+                      setState(() => _volume = v);
+                      _flutterTts.setVolume(v);
+                    },
                   ),
                 ),
               ),
@@ -596,12 +702,8 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                 ),
               ),
               const Spacer(),
-              // 10초 뒤로
-              _audioBtn(Icons.replay_10_rounded, () => setState(() {
-                    _currentPosition =
-                        (_currentPosition - 10).clamp(0, _totalDuration);
-                    _progress = _currentPosition / _totalDuration;
-                  })),
+              // 이전 페이지
+              _audioBtn(Icons.skip_previous_rounded, _prevPage),
               const SizedBox(width: 8),
               // 재생/일시정지
               GestureDetector(
@@ -622,14 +724,22 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              // 10초 앞으로
-              _audioBtn(Icons.forward_10_rounded, () => setState(() {
-                    _currentPosition =
-                        (_currentPosition + 10).clamp(0, _totalDuration);
-                    _progress = _currentPosition / _totalDuration;
-                  })),
+              // 다음 페이지
+              _audioBtn(Icons.skip_next_rounded, _nextPage),
               const SizedBox(width: 8),
-              _audioBtn(Icons.settings_rounded, () {}),
+              // 속도 설정
+              GestureDetector(
+                onTap: _showSpeedDialog,
+                child: Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F4FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.settings_rounded,
+                      size: 20, color: Color(0xFF7E57C2)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -650,12 +760,14 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
                     overlayShape: SliderComponentShape.noOverlay,
                   ),
                   child: Slider(
-                    value: _progress,
+                    value: _progress.clamp(0.0, 1.0),
                     min: 0, max: 1,
-                    onChanged: (v) => setState(() {
-                      _progress = v;
-                      _currentPosition = v * _totalDuration;
-                    }),
+                    onChanged: (v) {
+                      setState(() {
+                        _progress = v;
+                        _currentPosition = v * _totalDuration;
+                      });
+                    },
                   ),
                 ),
               ),
@@ -678,6 +790,77 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, size: 20, color: const Color(0xFF7E57C2)),
+      ),
+    );
+  }
+
+  // ── 속도 설정 다이얼로그 ──
+  void _showSpeedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('읽기 속도',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3D2C8D))),
+              const SizedBox(height: 16),
+              ...[
+                {'label': '느리게', 'rate': 0.3},
+                {'label': '보통', 'rate': 0.5},
+                {'label': '빠르게', 'rate': 0.7},
+              ].map((item) {
+                final isSelected = _speechRate == item['rate'];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _speechRate = item['rate'] as double);
+                    _flutterTts.setSpeechRate(item['rate'] as double);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFEDE7F6)
+                          : const Color(0xFFF8F4FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF7E57C2)
+                              : Colors.transparent),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(item['label'] as String,
+                            style: TextStyle(
+                                fontSize: 14,
+                                color: isSelected
+                                    ? const Color(0xFF7E57C2)
+                                    : const Color(0xFF3D2C8D),
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400)),
+                        const Spacer(),
+                        if (isSelected)
+                          const Icon(Icons.check,
+                              size: 18, color: Color(0xFF7E57C2)),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -838,6 +1021,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
           const Spacer(),
           ElevatedButton.icon(
             onPressed: () {
+              _flutterTts.stop();
               Navigator.push(
                 context,
                 MaterialPageRoute(
