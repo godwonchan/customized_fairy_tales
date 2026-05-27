@@ -1,7 +1,57 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'page_selection_screen.dart';
+// ═══════════════════════════════════════════════════════════════
+//  동화 페이지 데이터 모델
+// ═══════════════════════════════════════════════════════════════
 
+class TalePage {
+  final int pageNumber;
+  final String imagePath;
+  final String text;
+  final String? highlightText;
+
+  TalePage({
+    required this.pageNumber,
+    required this.imagePath,
+    required this.text,
+    this.highlightText,
+  });
+}
+
+class TaleBook {
+  final FairyTale tale;
+  final List<TalePage> pages;
+
+  TaleBook({required this.tale, required this.pages});
+
+  int get totalPages => pages.length;
+}
+
+TaleBook getTaleBook(FairyTale tale) {
+  if (tale.title == '백설공주') {
+    return TaleBook(
+      tale: tale,
+      pages: [
+        TalePage(pageNumber: 1, imagePath: 'assets/book_001_Snow_White/Snow_White_01.png', text: '옛날 옛적, 깊은 숲 속 왕국에 눈처럼 하얀 피부를 가진 아름다운 공주가 살았어요.'),
+        TalePage(pageNumber: 2, imagePath: 'assets/book_001_Snow_White/Snow_White_02.png', text: '왕국에는 마법 거울을 가진 새 왕비가 있었어요.', highlightText: '"거울아 거울아, 세상에서 누가 제일 예쁘니?"'),
+        TalePage(pageNumber: 3, imagePath: 'assets/book_001_Snow_White/Snow_White_03.png', text: '어느 날, 거울이 백설공주가 더 아름답다고 대답했어요.'),
+        TalePage(pageNumber: 4, imagePath: 'assets/book_001_Snow_White/Snow_White_04.png', text: '마음 착한 사냥꾼은 백설공주를 살려주었어요.'),
+        TalePage(pageNumber: 5, imagePath: 'assets/book_001_Snow_White/Snow_White_05.png', text: '오두막에는 일곱 난쟁이가 살고 있었어요.', highlightText: '"우리와 함께 살아요!"'),
+        TalePage(pageNumber: 6, imagePath: 'assets/book_001_Snow_White/Snow_White_06.png', text: '마침내 왕자님이 나타나 백설공주에게 입맞춤을 하자 마법이 풀렸어요.', highlightText: '"영원히 함께해요!"'),
+      ],
+    );
+  }
+
+  return TaleBook(
+    tale: tale,
+    pages: List.generate(5, (index) => TalePage(
+      pageNumber: index + 1,
+      imagePath: 'assets/${tale.imagePath}',
+      text: '${tale.title} ${index + 1}페이지 내용이에요.',
+    )),
+  );
+}
 // ═══════════════════════════════════════════════════════════════
 //  동화 읽기 화면 (오디오 플레이어 포함)
 // ═══════════════════════════════════════════════════════════════
