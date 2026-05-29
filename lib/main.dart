@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/favorites_provider.dart';
@@ -24,12 +25,13 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoSansKR',
         scaffoldBackgroundColor: const Color(0xFFF8F4FF),
         colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFB39DDB)),
-        pageTransitionsTheme: const PageTransitionsTheme(
+          seedColor: const Color(0xFFB39DDB),
+        ),
+        pageTransitionsTheme: PageTransitionsTheme(
           builders: {
-            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-            TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.windows: const CupertinoPageTransitionsBuilder(),
           },
         ),
       ),
