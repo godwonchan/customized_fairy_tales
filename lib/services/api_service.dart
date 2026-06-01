@@ -6,17 +6,6 @@ import 'package:http_parser/http_parser.dart';
 class ApiService {
   static const String baseUrl = 'http://127.0.0.1:8000';
 
-  // =========================
-  // Story list
-  // =========================
-  static Future<List<dynamic>> getStories() async {
-    final response = await http.get(Uri.parse('$baseUrl/stories'));
-    if (response.statusCode != 200) {
-      throw Exception('동화 목록 조회 실패: ${response.body}');
-    }
-    return jsonDecode(response.body) as List<dynamic>;
-  }
-
   static Future<List<dynamic>> getOriginalStories() async {
     final response = await http.get(Uri.parse('$baseUrl/stories/original'));
     if (response.statusCode != 200) {
@@ -41,9 +30,6 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  // =========================
-  // Pages
-  // =========================
   static Future<List<dynamic>> getOriginalPages(int storyId) async {
     final response =
         await http.get(Uri.parse('$baseUrl/stories/$storyId/pages/original'));
@@ -70,9 +56,6 @@ class ApiService {
     return '$baseUrl/stories/$storyId/pages/$pageNumber/image';
   }
 
-  // =========================
-  // Sketch / revise
-  // =========================
   static Future<Map<String, dynamic>> sketchInterpret({
     required int storyId,
     required int pageNumber,
@@ -147,34 +130,43 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> generatePreviewImage({
+  static Future<Map<String, dynamic>> applyRevisionAsync({
     required int storyId,
-    required int pageNumber,
-    required String selectedText,
-    required String interpretedRequest,
-    String? styleRequest,
+    required List<String> revisedPages,
+    required int startPageNumber,
+    String? confirmedRequest,
   }) async {
     final response = await http.post(
-      Uri.parse(
-          '$baseUrl/stories/$storyId/pages/$pageNumber/generate-preview-image'),
+      Uri.parse('$baseUrl/stories/$storyId/apply-revision-async'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'selected_text': selectedText,
-        'interpreted_request': interpretedRequest,
-        'style_request': styleRequest,
+        'revised_pages': revisedPages,
+        'confirmed_request': confirmedRequest,
+        'start_page_number': startPageNumber,
       }),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('장면 이미지 생성 실패: ${response.body}');
+      throw Exception('비동기 줄거리 수정 적용 실패: ${response.body}');
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  // =========================
-  // Plot
-  // =========================
+  static Future<Map<String, dynamic>> getRevisionJobStatus({
+    required String jobId,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/revision-jobs/$jobId'),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('수정 작업 상태 조회 실패: ${response.body}');
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   static Future<Map<String, dynamic>> rearrangePlots({
     required int storyId,
     required int plotCount,
@@ -232,26 +224,6 @@ class ApiService {
     return jsonDecode(response.body) as List<dynamic>;
   }
 
-  static Future<Map<String, dynamic>> generateSinglePlotImage({
-    required int storyId,
-    required int plotNumber,
-    String? styleRequest,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/stories/$storyId/plots/$plotNumber/generate-image'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'style_request': styleRequest,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('플롯 이미지 생성 실패: ${response.body}');
-    }
-
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
   static Future<Map<String, dynamic>> regeneratePlotImagesFrom({
     required int storyId,
     required int startPlotNumber,
@@ -287,19 +259,6 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  static Future<List<dynamic>> getPlotImages(int storyId) async {
-    final response =
-        await http.get(Uri.parse('$baseUrl/stories/$storyId/plots/images'));
-    if (response.statusCode != 200) {
-      throw Exception('플롯 이미지 목록 조회 실패: ${response.body}');
-    }
-    return jsonDecode(response.body) as List<dynamic>;
-  }
-
-  static String plotImageUrl(int storyId, int plotNumber) {
-    return '$baseUrl/stories/$storyId/plots/$plotNumber/image';
-  }
-
   static Future<Map<String, dynamic>> applyPlotImagesToPages({
     required int storyId,
     required int startPlotNumber,
@@ -319,12 +278,35 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> saveAsMyStory(int storyId) async {
-    final response =
-        await http.post(Uri.parse('$baseUrl/stories/$storyId/save-as-my-story'));
+  static Future<Map<String, dynamic>> saveAsMyStory({
+    required int storyId,
+    String? customTitle,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/save-as-my-story'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'custom_title': customTitle,
+      }),
+    );
 
     if (response.statusCode != 200) {
       throw Exception('내 이야기 저장 실패: ${response.body}');
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> resetToOriginal({
+    required int storyId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/stories/$storyId/reset-to-original'),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('원본 복원 실패: ${response.body}');
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;

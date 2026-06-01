@@ -29,6 +29,7 @@ DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, echo=False)
 
+
 # =========================
 # 2. DB 모델
 # =========================
@@ -119,6 +120,7 @@ class StoryPlotImage(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 # =========================
 # 3. API 스키마
@@ -294,6 +296,7 @@ class PlotImageGenerationStatusResponse(BaseModel):
     status: str
     plots: List[PlotImageGenerationStatusItem]
 
+
 # =========================
 # 4. 공통 유틸
 # =========================
@@ -391,6 +394,7 @@ def collect_style_reference_images(reference_pages: List[StoryPage]) -> List[dic
                 }
             )
     return refs
+
 
 # =========================
 # 5. 초기 데이터 import

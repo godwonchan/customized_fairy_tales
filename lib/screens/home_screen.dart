@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'my_stories_screen.dart';
 import 'settings_screen.dart';
-
+import 'package:flutter/services.dart' show rootBundle;
 // ═══════════════════════════════════════════════════════════════
 //  앱 전체 감싸는 메인 구조 (사이드바 + 콘텐츠)
 // ═══════════════════════════════════════════════════════════════
@@ -63,9 +63,9 @@ class _AppShellState extends State<AppShell> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // 로고
             Container(
-              width: 44, height: 44,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFF9575CD), Color(0xFF7E57C2)],
@@ -74,11 +74,13 @@ class _AppShellState extends State<AppShell> {
                 ),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.auto_stories,
-                  color: Colors.white, size: 24),
+              child: const Icon(
+                Icons.auto_stories,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
             const SizedBox(height: 32),
-            // 메뉴 아이템
             ...items.asMap().entries.map((entry) {
               final index = entry.key;
               final item = entry.value;
@@ -88,8 +90,7 @@ class _AppShellState extends State<AppShell> {
                 onTap: () => setState(() => _selectedIndex = index),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     color: isSelected
@@ -111,9 +112,8 @@ class _AppShellState extends State<AppShell> {
                         item['label'] as String,
                         style: TextStyle(
                           fontSize: 10,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w400,
                           color: isSelected
                               ? const Color(0xFF7E57C2)
                               : Colors.grey[400],
@@ -155,13 +155,14 @@ class _HomeScreenState extends State<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _fadeAnim = CurvedAnimation(
-        parent: _animController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _animController, curve: Curves.easeOutCubic));
+    ).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
+    );
     _animController.forward();
   }
 
@@ -177,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Stack(
       children: [
-        // 배경 그라데이션
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -192,9 +192,11 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         Positioned(
-          top: -60, right: -60,
+          top: -60,
+          right: -60,
           child: Container(
-            width: 300, height: 300,
+            width: 300,
+            height: 300,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF9575CD).withOpacity(0.08),
@@ -202,9 +204,11 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         Positioned(
-          bottom: -80, left: -40,
+          bottom: -80,
+          left: -40,
           child: Container(
-            width: 250, height: 250,
+            width: 250,
+            height: 250,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFFEC407A).withOpacity(0.06),
@@ -244,18 +248,24 @@ class _HomeScreenState extends State<HomeScreen>
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('안녕! 👋',
-                style: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    color: const Color(0xFF7E57C2),
-                    fontWeight: FontWeight.w600)),
+            Text(
+              '안녕! 👋',
+              style: TextStyle(
+                fontSize: isTablet ? 16 : 14,
+                color: const Color(0xFF7E57C2),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text('오늘은 어떤 이야기를\n만들까? ✨',
-                style: TextStyle(
-                    fontSize: isTablet ? 28 : 22,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF3D2C8D),
-                    height: 1.3)),
+            Text(
+              '오늘은 어떤 이야기를\n만들까? ✨',
+              style: TextStyle(
+                fontSize: isTablet ? 28 : 22,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3D2C8D),
+                height: 1.3,
+              ),
+            ),
           ],
         ),
         const Spacer(),
@@ -266,31 +276,42 @@ class _HomeScreenState extends State<HomeScreen>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2))
+                color: Colors.black.withOpacity(0.07),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
             ],
           ),
           child: Row(
             children: [
               Container(
-                width: 28, height: 28,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: const Color(0xFFEDE7F6),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.emoji_nature,
-                    size: 18, color: Color(0xFF7E57C2)),
+                child: const Icon(
+                  Icons.emoji_nature,
+                  size: 18,
+                  color: Color(0xFF7E57C2),
+                ),
               ),
               const SizedBox(width: 8),
-              const Text('토끼마을',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF3D2C8D))),
+              const Text(
+                '토끼마을',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF3D2C8D),
+                ),
+              ),
               const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down,
-                  size: 18, color: Color(0xFF7E57C2)),
+              const Icon(
+                Icons.keyboard_arrow_down,
+                size: 18,
+                color: Color(0xFF7E57C2),
+              ),
             ],
           ),
         ),
@@ -341,17 +362,17 @@ class _HomeScreenState extends State<HomeScreen>
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 12,
-              offset: const Offset(0, 4))
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: TextField(
         decoration: InputDecoration(
           hintText: '동화를 검색해보세요',
           hintStyle: TextStyle(fontSize: 14, color: Colors.grey[400]),
-          prefixIcon:
-              Icon(Icons.search, color: Colors.grey[400], size: 22),
+          prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 22),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
@@ -395,20 +416,24 @@ class _HomeScreenState extends State<HomeScreen>
     return isTablet
         ? Row(
             children: cards
-                .map((card) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: _buildMenuCard(card),
-                      ),
-                    ))
+                .map(
+                  (card) => Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _buildMenuCard(card),
+                    ),
+                  ),
+                )
                 .toList(),
           )
         : Column(
             children: cards
-                .map((card) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildMenuCard(card),
-                    ))
+                .map(
+                  (card) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildMenuCard(card),
+                  ),
+                )
                 .toList(),
           );
   }
@@ -423,44 +448,59 @@ class _HomeScreenState extends State<HomeScreen>
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.07),
-                blurRadius: 12,
-                offset: const Offset(0, 4))
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 48, height: 48,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: card['bgColor'] as Color,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(card['icon'] as IconData,
-                  color: card['iconColor'] as Color, size: 26),
+              child: Icon(
+                card['icon'] as IconData,
+                color: card['iconColor'] as Color,
+                size: 26,
+              ),
             ),
             const SizedBox(height: 14),
-            Text(card['title'] as String,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3D2C8D))),
+            Text(
+              card['title'] as String,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF3D2C8D),
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(card['desc'] as String,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    height: 1.5)),
+            Text(
+              card['desc'] as String,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[500],
+                height: 1.5,
+              ),
+            ),
             const SizedBox(height: 16),
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: card['bgColor'] as Color,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.arrow_forward,
-                  color: card['iconColor'] as Color, size: 18),
+              child: Icon(
+                Icons.arrow_forward,
+                color: card['iconColor'] as Color,
+                size: 18,
+              ),
             ),
           ],
         ),
@@ -482,27 +522,41 @@ class _HomeScreenState extends State<HomeScreen>
       child: Stack(
         children: [
           Positioned(
-            top: 20, right: 20,
-            child: Icon(Icons.auto_awesome,
-                size: 30, color: Colors.white.withOpacity(0.4)),
+            top: 20,
+            right: 20,
+            child: Icon(
+              Icons.auto_awesome,
+              size: 30,
+              color: Colors.white.withOpacity(0.4),
+            ),
           ),
           Positioned(
-            bottom: 30, left: 20,
-            child: Icon(Icons.star,
-                size: 20, color: Colors.white.withOpacity(0.3)),
+            bottom: 30,
+            left: 20,
+            child: Icon(
+              Icons.star,
+              size: 20,
+              color: Colors.white.withOpacity(0.3),
+            ),
           ),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.auto_stories,
-                    size: 80, color: Colors.white.withOpacity(0.7)),
+                Icon(
+                  Icons.auto_stories,
+                  size: 80,
+                  color: Colors.white.withOpacity(0.7),
+                ),
                 const SizedBox(height: 12),
-                Text('새로운 이야기가 기다려요!',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withOpacity(0.9))),
+                Text(
+                  '새로운 이야기가 기다려요!',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
               ],
             ),
           ),
@@ -511,7 +565,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── 동화 목록으로 이동 ──
   void _navigateToTaleList() {
     Navigator.push(
       context,
@@ -523,8 +576,9 @@ class _HomeScreenState extends State<HomeScreen>
             position: Tween<Offset>(
               begin: const Offset(1.0, 0.0),
               end: Offset.zero,
-            ).animate(CurvedAnimation(
-                parent: animation, curve: Curves.easeOutCubic)),
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
             child: FadeTransition(opacity: animation, child: child),
           );
         },
@@ -532,7 +586,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── 나의 책장으로 이동 ──
   void _navigateToMyStories() {
     Navigator.push(
       context,
@@ -544,8 +597,9 @@ class _HomeScreenState extends State<HomeScreen>
             position: Tween<Offset>(
               begin: const Offset(1.0, 0.0),
               end: Offset.zero,
-            ).animate(CurvedAnimation(
-                parent: animation, curve: Curves.easeOutCubic)),
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
             child: FadeTransition(opacity: animation, child: child),
           );
         },

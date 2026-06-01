@@ -1,63 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/favorites_provider.dart';
+import '../services/api_service.dart';
+import '../widgets/story_image_view.dart';
 import 'fairy_tale_list_screen.dart';
-
-// ═══════════════════════════════════════════════════════════════
-//  나의 책장 - 내가 만든 이야기 데이터 모델
-// ═══════════════════════════════════════════════════════════════
-
-class MyStory {
-  final String id;
-  final String title;
-  final String imagePath;
-  final String date;
-  final String category;
-
-  MyStory({
-    required this.id,
-    required this.title,
-    required this.imagePath,
-    required this.date,
-    required this.category,
-  });
-}
-
-// 샘플 - 내가 만든 이야기 데이터
-final List<MyStory> sampleMyStories = [
-  MyStory(
-    id: '1',
-    title: '지우와 늑대의\n우정 이야기',
-    imagePath: 'assets/red_riding_hood.jpeg',
-    date: '2024.06.10',
-    category: '고전 동화',
-  ),
-  MyStory(
-    id: '2',
-    title: '우주를 여행한\n피노키오',
-    imagePath: 'assets/pinocchio.jpeg',
-    date: '2024.06.09',
-    category: '창작 동화',
-  ),
-  MyStory(
-    id: '3',
-    title: '바닷속 친구들과\n인어공주',
-    imagePath: 'assets/little_mermaid.jpeg',
-    date: '2024.06.08',
-    category: '고전 동화',
-  ),
-  MyStory(
-    id: '4',
-    title: '마법 학교의\n신데렐라',
-    imagePath: 'assets/cinderella.jpeg',
-    date: '2024.06.07',
-    category: '창작 동화',
-  ),
-];
-
-// ═══════════════════════════════════════════════════════════════
-//  나의 책장 화면
-// ═══════════════════════════════════════════════════════════════
+import 'fairy_tale_detail_screen.dart';
+import 'home_screen.dart';
 
 class MyStoriesScreen extends StatefulWidget {
   const MyStoriesScreen({super.key});
@@ -74,6 +23,10 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
 
   final List<String> _tabs = ['전체', '내가 만든 이야기', '좋아하는 이야기'];
 
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<FairyTale> _myStories = [];
+
   @override
   void initState() {
     super.initState();
@@ -84,6 +37,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     _fadeAnim =
         CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+    _loadMyStories();
   }
 
   @override
@@ -92,19 +46,86 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     super.dispose();
   }
 
+  Color _colorForIndex(int index) {
+    final colors = [
+      const Color(0xFFFFF3E0),
+      const Color(0xFFE8F5E9),
+      const Color(0xFFE3F2FD),
+      const Color(0xFFF3E5F5),
+      const Color(0xFFFFEBEE),
+      const Color(0xFFE0F7FA),
+    ];
+    return colors[index % colors.length];
+  }
+
+  Future<void> _loadMyStories() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await ApiService.getMyStories();
+
+      final stories = data.asMap().entries.map((entry) {
+        final index = entry.key;
+        final item = entry.value as Map<String, dynamic>;
+
+        final storyId = item['id'] as int?;
+        final title = (item['title'] ?? '제목 없음').toString();
+        final description = (item['description'] ?? '내가 만든 이야기').toString();
+
+        return FairyTale(
+          title: title,
+          description: description,
+          imagePath: storyId != null
+              ? ApiService.storyPageImageUrl(storyId, 1)
+              : '',
+          cardColor: _colorForIndex(index),
+          storyId: storyId,
+          isUserStory: true,
+          category: '내 이야기',
+          sourceFolder: item['source_folder']?.toString(),
+          originalTitle: item['original_title']?.toString(),
+        );
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _myStories = stories;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _goHome() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HomeScreen(),
+      ),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
     final favoritesProvider = context.watch<FavoritesProvider>();
     final favoritesList = favoritesProvider.favorites;
 
-    // 탭별 데이터
     final allItems = [
-      ...sampleMyStories.map((s) => _StoryItem.fromMyStory(s)),
+      ..._myStories.map((t) => _StoryItem.fromFairyTale(t)),
       ...favoritesList.map((t) => _StoryItem.fromFairyTale(t)),
     ];
-    final myItems =
-        sampleMyStories.map((s) => _StoryItem.fromMyStory(s)).toList();
+
+    final myItems = _myStories.map((t) => _StoryItem.fromFairyTale(t)).toList();
     final favItems =
         favoritesList.map((t) => _StoryItem.fromFairyTale(t)).toList();
 
@@ -127,9 +148,13 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
               _buildTabs(isTablet, favoritesProvider),
               const SizedBox(height: 16),
               Expanded(
-                child: currentItems.isEmpty
-                    ? _buildEmptyState()
-                    : _buildGrid(currentItems, isTablet),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _errorMessage != null
+                        ? _buildErrorState()
+                        : currentItems.isEmpty
+                            ? _buildEmptyState()
+                            : _buildGrid(currentItems, isTablet),
               ),
             ],
           ),
@@ -138,315 +163,222 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     );
   }
 
-  // ── 헤더 ──
   Widget _buildHeader(BuildContext context, bool isTablet) {
-    final hPadding = isTablet ? 32.0 : 16.0;
-    final favCount =
-        context.watch<FavoritesProvider>().favorites.length;
-    final totalCount = sampleMyStories.length + favCount;
+    final hPadding = isTablet ? 28.0 : 18.0;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(hPadding, 16, hPadding, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.fromLTRB(hPadding, 18, hPadding, 0),
+      child: Row(
         children: [
-          Text('07 나의 책장',
-              style:
-                  TextStyle(fontSize: 12, color: Colors.grey[500])),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.maybePop(context),
-                child: Container(
-                  width: isTablet ? 44 : 36,
-                  height: isTablet ? 44 : 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2))
-                    ],
-                  ),
-                  child: Icon(Icons.chevron_left,
-                      color: const Color(0xFF7E57C2),
-                      size: isTablet ? 28 : 22),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text('나의 책장',
-                  style: TextStyle(
-                      fontSize: isTablet ? 28 : 22,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF3D2C8D),
-                      letterSpacing: -0.5)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.auto_stories,
-                        size: 16, color: Color(0xFF7E57C2)),
-                    const SizedBox(width: 6),
-                    Text('총 ${totalCount}개의 이야기',
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF7E57C2),
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            '나의 책장',
+            style: TextStyle(
+              fontSize: isTablet ? 28 : 24,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF3D2C8D),
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: _goHome,
+            icon: const Icon(Icons.home_rounded),
+            color: const Color(0xFF7E57C2),
+            tooltip: '홈으로',
+          ),
+          IconButton(
+            onPressed: _loadMyStories,
+            icon: const Icon(Icons.refresh),
+            color: const Color(0xFF7E57C2),
+            tooltip: '새로고침',
           ),
         ],
       ),
     );
   }
 
-  // ── 탭 ──
-  Widget _buildTabs(bool isTablet, FavoritesProvider provider) {
-    final hPadding = isTablet ? 32.0 : 16.0;
-    final favCount = provider.favorites.length;
+  Widget _buildTabs(bool isTablet, FavoritesProvider favoritesProvider) {
+    final counts = [
+      _myStories.length + favoritesProvider.favorites.length,
+      _myStories.length,
+      favoritesProvider.favorites.length,
+    ];
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: hPadding),
-      child: Row(
-        children: _tabs.asMap().entries.map((entry) {
-          final index = entry.key;
-          final label = entry.value;
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        padding: EdgeInsets.symmetric(horizontal: isTablet ? 24 : 16),
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (context, index) {
           final isSelected = _selectedTab == index;
-
-          // 좋아하는 이야기 탭에 개수 뱃지
-          final showBadge = index == 2 && favCount > 0;
-
           return GestureDetector(
-            onTap: () {
-              setState(() => _selectedTab = index);
-              _animController.forward(from: 0);
-            },
+            onTap: () => setState(() => _selectedTab = index),
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
+              duration: const Duration(milliseconds: 220),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF7E57C2)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: isSelected
-                        ? const Color(0xFF7E57C2).withOpacity(0.3)
-                        : Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: isSelected ? const Color(0xFF7E57C2) : Colors.white,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF7E57C2).withOpacity(0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
               ),
               child: Row(
                 children: [
                   Text(
-                    label,
+                    _tabs[index],
                     style: TextStyle(
-                      fontSize: isTablet ? 14 : 13,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.grey[600],
+                      fontSize: isTablet ? 14 : 12,
+                      fontWeight: FontWeight.w700,
+                      color:
+                          isSelected ? Colors.white : const Color(0xFF3D2C8D),
                     ),
                   ),
-                  if (showBadge) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.white.withOpacity(0.2)
+                          : const Color(0xFFEDE7F6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${counts[index]}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                         color: isSelected
-                            ? Colors.white.withOpacity(0.3)
+                            ? Colors.white
                             : const Color(0xFF7E57C2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '$favCount',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.white,
-                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
           );
-        }).toList(),
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: _tabs.length,
       ),
     );
   }
 
-  // ── 그리드 ──
   Widget _buildGrid(List<_StoryItem> items, bool isTablet) {
-    final hPadding = isTablet ? 32.0 : 16.0;
-    final columns = isTablet ? 4 : 2;
+    final crossAxisCount = isTablet ? 3 : 2;
 
     return GridView.builder(
       padding:
-          EdgeInsets.symmetric(horizontal: hPadding, vertical: 4),
+          EdgeInsets.fromLTRB(isTablet ? 24 : 16, 0, isTablet ? 24 : 16, 24),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
+        crossAxisCount: crossAxisCount,
         crossAxisSpacing: 14,
         mainAxisSpacing: 14,
-        childAspectRatio: isTablet ? 0.75 : 0.7,
+        childAspectRatio: 0.72,
       ),
       itemCount: items.length,
-      itemBuilder: (context, index) =>
-          _buildStoryCard(items[index], isTablet),
+      itemBuilder: (context, index) => _buildStoryCard(items[index]),
     );
   }
 
-  // ── 스토리 카드 ──
-  Widget _buildStoryCard(_StoryItem item, bool isTablet) {
+  Widget _buildStoryCard(_StoryItem item) {
+    final tale = item.tale;
+
     return GestureDetector(
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                '${item.title.replaceAll('\n', ' ')} 읽기'),
-            duration: const Duration(seconds: 1),
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FairyTaleDetailScreen(tale: tale),
           ),
         );
+        _loadMyStories();
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.07),
-                blurRadius: 12,
-                offset: const Offset(0, 4))
-          ],
+          color: tale.cardColor,
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16)),
-                    child: Image.asset(
-                      item.imagePath,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFFEDE7F6),
-                              const Color(0xFFD1C4E9),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(16)),
-                        ),
-                        child: Center(
-                          child: Icon(Icons.auto_stories,
-                              size: isTablet ? 60 : 50,
-                              color: Colors.white.withOpacity(0.7)),
-                        ),
-                      ),
-                    ),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: tale.cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
                   ),
-                  // 뱃지
-                  Positioned(
-                    top: 8, left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: item.isMyStory
-                            ? const Color(0xFF7E57C2)
-                            : const Color(0xFFE91E63),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        item.isMyStory ? '내 작품' : '즐겨찾기',
-                        style: const TextStyle(
-                            fontSize: 9,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
                   ),
-                  // 하트
-                  Positioned(
-                    top: 8, right: 8,
-                    child: Container(
-                      width: 28, height: 28,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        item.isMyStory
-                            ? Icons.more_vert
-                            : Icons.favorite,
-                        size: 16,
-                        color: item.isMyStory
-                            ? Colors.grey[600]
-                            : const Color(0xFFE91E63),
-                      ),
-                    ),
+                  child: StoryImageView(
+                    imagePath: tale.imagePath,
+                    fit: BoxFit.cover,
                   ),
-                ],
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(20),
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
-                    style: TextStyle(
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF3D2C8D),
-                      height: 1.4,
-                    ),
+                    tale.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3D2C8D),
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    item.category,
+                    tale.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 11, color: Colors.grey[400]),
+                      fontSize: 12,
+                      height: 1.5,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E5F5),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      tale.category,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF7E57C2),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -457,74 +389,88 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     );
   }
 
-  // ── 빈 상태 ──
   Widget _buildEmptyState() {
-    final messages = [
-      '동화를 탐색하고 즐겨찾기를 추가해보세요!',
-      '아직 만든 이야기가 없어요!\nAI로 나만의 동화를 만들어보세요 😊',
-      '동화 목록에서 하트를 눌러\n좋아하는 동화를 추가해보세요 💜',
-    ];
-
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _selectedTab == 2
-                ? Icons.favorite_border
-                : Icons.auto_stories,
-            size: 80,
-            color: Colors.grey[300],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _selectedTab == 1
-                ? '아직 만든 이야기가 없어요!'
-                : _selectedTab == 2
-                    ? '좋아하는 이야기가 없어요!'
-                    : '이야기가 없어요!',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[400]),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            messages[_selectedTab],
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.grey[300]),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.auto_stories_outlined,
+              size: 72,
+              color: Color(0xFFB39DDB),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '아직 저장된 이야기가 없어요',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF3D2C8D),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '동화를 수정하고 저장하면\n여기에 나타나요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.6,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 60,
+              color: Colors.redAccent,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '나의 책장을 불러오지 못했어요',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF3D2C8D),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadMyStories,
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── 통합 아이템 모델 ──
 class _StoryItem {
-  final String title;
-  final String imagePath;
-  final String category;
-  final bool isMyStory;
+  final FairyTale tale;
 
-  _StoryItem({
-    required this.title,
-    required this.imagePath,
-    required this.category,
-    required this.isMyStory,
-  });
+  _StoryItem({required this.tale});
 
-  factory _StoryItem.fromMyStory(MyStory s) => _StoryItem(
-        title: s.title,
-        imagePath: s.imagePath,
-        category: s.category,
-        isMyStory: true,
-      );
-
-  factory _StoryItem.fromFairyTale(FairyTale t) => _StoryItem(
-        title: t.title,
-        imagePath: 'assets/${t.imagePath}',
-        category: t.category,
-        isMyStory: false,
-      );
+  factory _StoryItem.fromFairyTale(FairyTale tale) {
+    return _StoryItem(tale: tale);
+  }
 }

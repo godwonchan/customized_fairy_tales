@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
+import 'my_stories_screen.dart';
 
 class PlotImageGenerationScreen extends StatefulWidget {
   final FairyTale tale;
@@ -164,7 +165,46 @@ class _PlotImageGenerationScreenState extends State<PlotImageGenerationScreen> {
     }
   }
 
+  Future<String?> _askStoryTitle() async {
+    final controller = TextEditingController();
+    controller.text = '${widget.tale.title}의 새로운 이야기';
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('동화 이름 짓기'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: '내가 만든 동화 제목을 입력해 주세요',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                Navigator.pop(context, value.isEmpty ? null : value);
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _applyToStoryPages() async {
+    final customTitle = await _askStoryTitle();
+    if (customTitle == null || customTitle.trim().isEmpty) {
+      return;
+    }
+
     setState(() {
       _isApplying = true;
       _errorMessage = null;
@@ -176,7 +216,10 @@ class _PlotImageGenerationScreenState extends State<PlotImageGenerationScreen> {
         startPlotNumber: _startPlotNumber,
       );
 
-      await ApiService.saveAsMyStory(_storyId);
+      await ApiService.saveAsMyStory(
+        storyId: _storyId,
+        customTitle: customTitle,
+      );
 
       if (!mounted) return;
 
@@ -187,9 +230,7 @@ class _PlotImageGenerationScreenState extends State<PlotImageGenerationScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const FairyTaleListScreen(
-            initialTab: FairyTaleTab.myBookshelf,
-          ),
+          builder: (_) => const MyStoriesScreen(),
         ),
         (route) => false,
       );
@@ -428,37 +469,6 @@ class _PlotImageGenerationScreenState extends State<PlotImageGenerationScreen> {
                                     height: 1.5,
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: _isBeforeStartPlot(plotNumber)
-                                      ? Image.network(
-                                          '${ApiService.storyPageImageUrl(_storyId, plotNumber)}?ts=${DateTime.now().millisecondsSinceEpoch}',
-                                          height: 180,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : status.toLowerCase() == 'completed'
-                                          ? Image.network(
-                                              '${ApiService.plotImageUrl(_storyId, plotNumber)}?ts=${DateTime.now().millisecondsSinceEpoch}',
-                                              height: 180,
-                                              width: double.infinity,
-                                              fit: BoxFit.cover,
-                                            )
-                                          : Container(
-                                              height: 180,
-                                              color: const Color(0xFFF8F4FF),
-                                              child: Center(
-                                                child: Text(
-                                                  _statusText(status),
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF7E57C2),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                ),
                               ],
                             ),
                           );
@@ -496,7 +506,7 @@ class _PlotImageGenerationScreenState extends State<PlotImageGenerationScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Text('나의 책장에 저장'),
+                                  : const Text('제목 정하고 저장'),
                             ),
                           ),
                         ],

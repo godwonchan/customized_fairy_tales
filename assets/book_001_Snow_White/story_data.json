@@ -1,0 +1,36 @@
+{
+  "title": "백설공주",
+  "description": "질투 많은 왕비와 백설공주의 이야기",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_01.png",
+      "text": "옛날 어느 나라에 눈처럼 하얀 피부를 가진 백설공주가 살고 있었습니다. 하지만 공주의 새엄마인 왕비는 허영심이 많고 질투가 심했죠. 왕비에게는 \"거울아, 거울아, 이 세상에서 누가 제일 예쁘니?\"라고 물으면 대답해 주는 마법 거울이 있었습니다."
+    },
+    {
+      "pageNumber": 2,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_02.png",
+      "text": "어느 날 거울이 왕비가 아닌 백설공주가 가장 예쁘다고 대답하자, 분노한 왕비는 사냥꾼을 시켜 공주를 죽이라고 명령합니다. 차마 공주를 죽일 수 없었던 사냥꾼은 그녀를 숲속으로 도망치게 합니다."
+    },
+    {
+      "pageNumber": 3,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_03.png",
+      "text": "숲속을 헤매던 백설공주는 작은 오두막을 발견하고, 그곳에 사는 일곱 난쟁이의 도움을 받아 함께 살게 됩니다. 난쟁이들은 광산에서 일하며 공주를 보살펴 주었습니다."
+    },
+    {
+      "pageNumber": 4,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_04.png",
+      "text": "한편, 악한 왕비는 마법의 거울에서 백설공주가 살아있다는 것을 알게 되었어요. 왕비는 노파로 변장한 후, 빨간 사과를 가지고 백설공주를 찾아갔어요. \"예쁜 공주님, 이 사과를 먹어봐.\" 백설공주는 사과를 깨물었어요. 그 순간, 독이 든 사과에 중독된 백설공주는 쓰러졌어요."
+    },
+    {
+      "pageNumber": 5,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_05.png",
+      "text": "난쟁이들은 슬퍼하며 백설공주를 유리관에 눕혀 숲속에 두었어요. 시간이 지나 한 왕자가 그녀를 발견했고, 진심 어린 사랑의 키스를 했답니다. 그러자 마법이 풀리며, 백설공주가 깨어났습니다."
+    },
+    {
+      "pageNumber": 6,
+      "imagePath": "assets/book_001_Snow_White/Snow_White_06.png",
+      "text": "결국 백설공주는 왕자와 행복하게 살았고, 질투심 많은 왕비는 자신의 욕심 때문에 비참한 최후를 맞았답니다."
+    }
+  ]
+}

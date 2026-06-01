@@ -1,5 +1,7 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+import uuid
+import threading
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
@@ -54,7 +56,11 @@ from ai_services import (
     generate_scene_preview_image,
     generate_plot_image_prompt,
     generate_plot_image_bytes,
+    generate_story_page_image_prompt,
+    generate_story_page_image_bytes,
 )
+
+print("### LOADED UPDATED MAIN.PY ###")
 
 app = FastAPI(title="Storybook Server")
 
@@ -66,9 +72,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+revision_jobs: Dict[str, Dict[str, Any]] = {}
+
 
 # =========================
-# 추가 요청/응답 스키마
+# 요청 / 응답 모델
 # =========================
 class SketchRevisionPreviewRequestV2(BaseModel):
     page_number: int
@@ -88,6 +96,30 @@ class SketchRevisionPreviewResponseV2(BaseModel):
 class StoryApplyRevisionPagesRequest(BaseModel):
     revised_pages: List[str]
     confirmed_request: Optional[str] = None
+    start_page_number: int
+
+
+class StoryApplyRevisionStartResponse(BaseModel):
+    job_id: str
+    status: str
+    story_id: int
+    total_pages: int
+    message: str
+
+
+class StoryRevisionJobStatusResponse(BaseModel):
+    job_id: str
+    story_id: int
+    status: str
+    total_pages: int
+    completed_pages: int
+    failed_pages: int
+    progress_percent: int
+    current_page_number: Optional[int] = None
+    generated_image_paths: List[str]
+    revised_pages: List[str]
+    error: Optional[str] = None
+    message: Optional[str] = None
 
 
 class RegenerateFromPlotRequest(BaseModel):
@@ -99,6 +131,13 @@ class ApplyPlotImagesToPagesRequest(BaseModel):
     start_plot_number: int = 1
 
 
+class SaveAsMyStoryRequest(BaseModel):
+    custom_title: Optional[str] = None
+
+
+# =========================
+# startup
+# =========================
 @app.on_event("startup")
 def on_startup():
     SQLModel.metadata.create_all(engine)
@@ -108,6 +147,11 @@ def on_startup():
 @app.get("/")
 def root():
     return {"message": "Storybook server is running"}
+
+
+# =========================
+# 내부 비동기 작업
+# =========================
 
 
 # =========================
@@ -378,82 +422,67 @@ def revise_story_preview(story_id: int, payload: StoryReviseRequest):
         )
 
 
-@app.post("/stories/{story_id}/apply-revision", response_model=StoryRead)
-def apply_story_revision(story_id: int, payload: StoryApplyRevisionPagesRequest):
-    with Session(engine) as session:
-        story = session.get(Story, story_id)
-        if not story:
-            raise HTTPException(status_code=404, detail="해당 동화를 찾을 수 없습니다.")
+@app.post("/stories/{story_id}/apply-revision-async", response_model=StoryApplyRevisionStartResponse)
+def apply_story_revision_async(story_id: int, payload: StoryApplyRevisionPagesRequest):
+    job_id = str(uuid.uuid4())
 
-        pages = session.exec(
-            select(StoryPage)
-            .where(StoryPage.story_id == story_id)
-            .where(StoryPage.is_cover == False)  # noqa: E712
-            .order_by(StoryPage.page_number)
-        ).all()
+    revision_jobs[job_id] = {
+        "job_id": job_id,
+        "story_id": story_id,
+        "status": "queued",
+        "total_pages": len(payload.revised_pages),
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "progress_percent": 0,
+        "current_page_number": None,
+        "generated_image_paths": [],
+        "revised_pages": payload.revised_pages,
+        "error": None,
+        "message": "작업 대기 중입니다.",
+    }
 
-        if not pages:
-            raise HTTPException(status_code=400, detail="수정할 페이지가 없습니다.")
+    thread = threading.Thread(
+        target=_run_apply_revision_job,
+        args=(
+            job_id,
+            story_id,
+            payload.revised_pages,
+            payload.confirmed_request,
+            payload.start_page_number,
+        ),
+        daemon=True,
+    )
+    thread.start()
 
-        if len(payload.revised_pages) != len(pages):
-            raise HTTPException(
-                status_code=400,
-                detail=f"페이지 수가 맞지 않습니다. expected={len(pages)}, actual={len(payload.revised_pages)}",
-            )
+    return StoryApplyRevisionStartResponse(
+        job_id=job_id,
+        status="queued",
+        story_id=story_id,
+        total_pages=len(payload.revised_pages),
+        message="이미지 생성 작업을 시작했습니다.",
+    )
 
-        save_story_version(session, story)
 
-        for idx, page in enumerate(pages):
-            page.text_content = payload.revised_pages[idx]
-            page.updated_at = datetime.utcnow()
-            session.add(page)
+@app.get("/revision-jobs/{job_id}", response_model=StoryRevisionJobStatusResponse)
+def get_revision_job_status(job_id: str):
+    job = revision_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
 
-        story.content = build_story_content_from_pages(payload.revised_pages)
-        story.updated_at = datetime.utcnow()
-
-        if payload.confirmed_request:
-            story.last_confirmed_change = payload.confirmed_request
-
-        session.add(story)
-
-        # 수정 후 기존 플롯 데이터 초기화
-        old_plot_contents = session.exec(
-            select(StoryPlotContent).where(StoryPlotContent.story_id == story_id)
-        ).all()
-        for c in old_plot_contents:
-            session.delete(c)
-
-        old_plot_images = session.exec(
-            select(StoryPlotImage).where(StoryPlotImage.story_id == story_id)
-        ).all()
-        for img in old_plot_images:
-            session.delete(img)
-
-        old_plots = session.exec(
-            select(StoryPlot).where(StoryPlot.story_id == story_id)
-        ).all()
-        for p in old_plots:
-            session.delete(p)
-
-        session.commit()
-        session.refresh(story)
-
-        return StoryRead(
-            id=story.id,
-            book_id=story.book_id,
-            title=story.title,
-            original_title=story.original_title,
-            language=story.language,
-            total_pages=story.total_pages,
-            description=story.description,
-            source_folder=story.source_folder,
-            content=story.content,
-            last_confirmed_change=story.last_confirmed_change,
-            is_user_story=story.is_user_story,
-            parent_story_id=story.parent_story_id,
-            created_at=story.created_at,
-            updated_at=story.updated_at,
-        )
+    return StoryRevisionJobStatusResponse(
+        job_id=job["job_id"],
+        story_id=job["story_id"],
+        status=job["status"],
+        total_pages=job["total_pages"],
+        completed_pages=job["completed_pages"],
+        failed_pages=job["failed_pages"],
+        progress_percent=job["progress_percent"],
+        current_page_number=job["current_page_number"],
+        generated_image_paths=job["generated_image_paths"],
+        revised_pages=job["revised_pages"],
+        error=job["error"],
+        message=job["message"],
+    )
 
 
 @app.post("/stories/{story_id}/reset-to-original", response_model=StoryRead)
@@ -700,7 +729,6 @@ def generate_preview_image_endpoint(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"장면 이미지 생성 실패: {e}")
 
-        # 미리보기는 저장하지 않음
         return ScenePreviewImageResponse(
             story_id=story_id,
             page_number=page_number,
@@ -1016,8 +1044,6 @@ def regenerate_plot_images_from_endpoint(story_id: int, payload: RegenerateFromP
             raise HTTPException(status_code=400, detail="재생성할 플롯이 없습니다.")
 
         for plot in target_plots:
-            print(f"[START] plot={plot.plot_number}")
-
             content_row = session.exec(
                 select(StoryPlotContent)
                 .where(StoryPlotContent.story_id == story_id)
@@ -1025,7 +1051,6 @@ def regenerate_plot_images_from_endpoint(story_id: int, payload: RegenerateFromP
             ).first()
 
             if not content_row:
-                print(f"[NO CONTENT] plot={plot.plot_number}")
                 plot.image_status = "failed"
                 plot.image_error = "플롯 본문이 없습니다."
                 plot.updated_at = datetime.utcnow()
@@ -1039,17 +1064,12 @@ def regenerate_plot_images_from_endpoint(story_id: int, payload: RegenerateFromP
             session.add(plot)
             session.commit()
 
-            print(f"[PROCESSING] plot={plot.plot_number}")
-            print(f"[SUMMARY] {plot.summary}")
-            print(f"[CONTENT] {content_row.content}")
-
             try:
                 reference_pages = get_style_reference_pages(session, story_id)
                 style_reference_hint = build_style_reference_hint(reference_pages)
                 style_reference_page_numbers = ",".join([str(p.page_number) for p in reference_pages])
                 reference_images = collect_style_reference_images(reference_pages)
 
-                print(f"[PROMPT BUILD START] plot={plot.plot_number}")
                 image_prompt = generate_plot_image_prompt(
                     story_title=story.title,
                     plot_number=plot.plot_number,
@@ -1058,16 +1078,12 @@ def regenerate_plot_images_from_endpoint(story_id: int, payload: RegenerateFromP
                     style_reference_hint=style_reference_hint,
                     style_request=payload.style_request,
                 )
-                print(f"[PROMPT BUILT] plot={plot.plot_number}")
-                print(f"[IMAGE PROMPT] {image_prompt}")
 
-                print(f"[OPENAI REQUEST START] plot={plot.plot_number}")
                 image_bytes, mime_type, filename = generate_plot_image_bytes(
                     image_prompt=image_prompt,
                     plot_number=plot.plot_number,
                     reference_images=reference_images,
                 )
-                print(f"[OPENAI REQUEST DONE] plot={plot.plot_number}")
 
                 existing_row = session.exec(
                     select(StoryPlotImage)
@@ -1101,10 +1117,8 @@ def regenerate_plot_images_from_endpoint(story_id: int, payload: RegenerateFromP
                 plot.updated_at = datetime.utcnow()
                 session.add(plot)
                 session.commit()
-                print(f"[SUCCESS] plot={plot.plot_number}")
 
             except Exception as e:
-                print(f"[FAILED] plot={plot.plot_number}, error={e}")
                 plot.image_status = "failed"
                 plot.image_error = str(e)
                 plot.updated_at = datetime.utcnow()
@@ -1264,7 +1278,7 @@ def apply_plot_images_to_pages_endpoint(story_id: int, payload: ApplyPlotImagesT
 # Save as my story
 # =========================
 @app.post("/stories/{story_id}/save-as-my-story", response_model=StoryRead)
-def save_as_my_story(story_id: int):
+def save_as_my_story(story_id: int, payload: Optional[SaveAsMyStoryRequest] = None):
     with Session(engine) as session:
         source_story = session.get(Story, story_id)
         if not source_story:
@@ -1276,7 +1290,6 @@ def save_as_my_story(story_id: int):
             .order_by(StoryPage.page_number)
         ).all()
 
-        # 현재 수정본 기준으로 content 재구성
         current_text_pages = [
             (p.text_content or "")
             for p in source_pages
@@ -1284,9 +1297,15 @@ def save_as_my_story(story_id: int):
         ]
         current_story_content = build_story_content_from_pages(current_text_pages)
 
+        new_title = (
+            payload.custom_title
+            if payload and payload.custom_title
+            else f"{source_story.title} - 내 이야기"
+        )
+
         new_story = Story(
             book_id=source_story.book_id,
-            title=f"{source_story.title} - 내 이야기",
+            title=new_title,
             original_title=source_story.original_title,
             language=source_story.language,
             total_pages=source_story.total_pages,
@@ -1306,14 +1325,10 @@ def save_as_my_story(story_id: int):
                 story_id=new_story.id,
                 page_number=p.page_number,
                 is_cover=p.is_cover,
-
-                # 원본도 보존
                 original_text_content=p.original_text_content,
                 original_image_data=p.original_image_data,
                 original_image_mime_type=p.original_image_mime_type,
                 original_image_filename=p.original_image_filename,
-
-                # 현재 수정본을 "내 이야기" 현재본으로 저장
                 text_content=p.text_content,
                 image_data=p.image_data,
                 image_mime_type=p.image_mime_type,
@@ -1339,3 +1354,213 @@ def save_as_my_story(story_id: int):
             created_at=new_story.created_at,
             updated_at=new_story.updated_at,
         )
+    
+
+@app.post("/stories/{story_id}/apply-revision-async", response_model=StoryApplyRevisionStartResponse)
+def apply_story_revision_async(story_id: int, payload: StoryApplyRevisionPagesRequest):
+    job_id = str(uuid.uuid4())
+
+    revision_jobs[job_id] = {
+        "job_id": job_id,
+        "story_id": story_id,
+        "status": "queued",
+        "total_pages": len(payload.revised_pages),
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "progress_percent": 0,
+        "current_page_number": None,
+        "generated_image_paths": [],
+        "revised_pages": payload.revised_pages,
+        "error": None,
+        "message": "작업 대기 중입니다.",
+    }
+
+    thread = threading.Thread(
+        target=_run_apply_revision_job,
+        args=(
+            job_id,
+            story_id,
+            payload.revised_pages,
+            payload.confirmed_request,
+            payload.start_page_number,
+        ),
+        daemon=True,
+    )
+    thread.start()
+
+    return StoryApplyRevisionStartResponse(
+        job_id=job_id,
+        status="queued",
+        story_id=story_id,
+        total_pages=len(payload.revised_pages),
+        message="이미지 생성 작업을 시작했습니다.",
+    )
+
+@app.get("/revision-jobs/{job_id}", response_model=StoryRevisionJobStatusResponse)
+def get_revision_job_status(job_id: str):
+    job = revision_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="해당 작업을 찾을 수 없습니다.")
+
+    return StoryRevisionJobStatusResponse(
+        job_id=job["job_id"],
+        story_id=job["story_id"],
+        status=job["status"],
+        total_pages=job["total_pages"],
+        completed_pages=job["completed_pages"],
+        failed_pages=job["failed_pages"],
+        progress_percent=job["progress_percent"],
+        current_page_number=job["current_page_number"],
+        generated_image_paths=job["generated_image_paths"],
+        revised_pages=job["revised_pages"],
+        error=job["error"],
+        message=job["message"],
+    )
+    
+def _run_apply_revision_job(
+    job_id: str,
+    story_id: int,
+    revised_pages: List[str],
+    confirmed_request: Optional[str],
+    start_page_number: int,
+):
+    revision_jobs[job_id] = {
+        "job_id": job_id,
+        "story_id": story_id,
+        "status": "processing",
+        "total_pages": len(revised_pages),
+        "completed_pages": 0,
+        "failed_pages": 0,
+        "progress_percent": 0,
+        "current_page_number": None,
+        "generated_image_paths": [],
+        "revised_pages": revised_pages,
+        "error": None,
+        "message": "이미지 생성 중입니다.",
+    }
+
+    try:
+        with Session(engine) as session:
+            story = session.get(Story, story_id)
+            if not story:
+                raise RuntimeError("해당 동화를 찾을 수 없습니다.")
+
+            pages = session.exec(
+                select(StoryPage)
+                .where(StoryPage.story_id == story_id)
+                .where(StoryPage.is_cover == False)  # noqa: E712
+                .order_by(StoryPage.page_number)
+            ).all()
+
+            if not pages:
+                raise RuntimeError("수정할 페이지가 없습니다.")
+
+            if len(revised_pages) != len(pages):
+                raise RuntimeError(
+                    f"페이지 수가 맞지 않습니다. expected={len(pages)}, actual={len(revised_pages)}"
+                )
+
+            save_story_version(session, story)
+
+            reference_pages = get_style_reference_pages(session, story_id)
+            style_reference_hint = build_style_reference_hint(reference_pages)
+            reference_images = collect_style_reference_images(reference_pages)
+
+            generated_image_paths: List[str] = []
+
+            for idx, page in enumerate(pages):
+                page_no = page.page_number
+                revised_text = revised_pages[idx]
+
+                # 텍스트는 전체 페이지에 반영
+                page.text_content = revised_text
+
+                # 시작 페이지 이후만 이미지 재생성
+                should_regenerate_image = page_no >= start_page_number
+
+                if should_regenerate_image:
+                    revision_jobs[job_id]["current_page_number"] = page_no
+                    revision_jobs[job_id]["message"] = f"{page_no}페이지 이미지 생성 중..."
+
+                    try:
+                        image_prompt = generate_story_page_image_prompt(
+                            story_title=story.title,
+                            page_number=page_no,
+                            page_text=revised_text,
+                            style_reference_hint=style_reference_hint,
+                            required_changes=confirmed_request,
+                        )
+
+                        image_bytes, mime_type, filename = generate_story_page_image_bytes(
+                            image_prompt=image_prompt,
+                            page_number=page_no,
+                            reference_images=reference_images,
+                        )
+
+                        page.image_data = image_bytes
+                        page.image_mime_type = mime_type
+                        page.image_filename = filename
+
+                    except Exception as e:
+                        print(f"[APPLY REVISION IMAGE FAILED] page={page_no}, error={e}")
+                        revision_jobs[job_id]["failed_pages"] += 1
+                        # 실패해도 기존 이미지는 유지됨
+
+                page.updated_at = datetime.utcnow()
+                session.add(page)
+
+                image_url = (
+                    f"http://127.0.0.1:8000/stories/{story_id}/pages/{page_no}/image"
+                    f"?ts={int(datetime.utcnow().timestamp())}"
+                )
+                generated_image_paths.append(image_url)
+
+                revision_jobs[job_id]["generated_image_paths"] = generated_image_paths
+                revision_jobs[job_id]["completed_pages"] = idx + 1
+                revision_jobs[job_id]["progress_percent"] = int(
+                    ((idx + 1) / len(pages)) * 100
+                )
+                revision_jobs[job_id]["message"] = (
+                    f"{idx + 1}/{len(pages)} 페이지 처리 완료"
+                )
+
+            story.content = build_story_content_from_pages(revised_pages)
+            story.updated_at = datetime.utcnow()
+
+            if confirmed_request:
+                story.last_confirmed_change = confirmed_request
+
+            session.add(story)
+
+            # 수정 후 기존 플롯 데이터 초기화
+            old_plot_contents = session.exec(
+                select(StoryPlotContent).where(StoryPlotContent.story_id == story_id)
+            ).all()
+            for c in old_plot_contents:
+                session.delete(c)
+
+            old_plot_images = session.exec(
+                select(StoryPlotImage).where(StoryPlotImage.story_id == story_id)
+            ).all()
+            for img in old_plot_images:
+                session.delete(img)
+
+            old_plots = session.exec(
+                select(StoryPlot).where(StoryPlot.story_id == story_id)
+            ).all()
+            for p in old_plots:
+                session.delete(p)
+
+            session.commit()
+            session.refresh(story)
+
+        revision_jobs[job_id]["status"] = "completed"
+        revision_jobs[job_id]["current_page_number"] = None
+        revision_jobs[job_id]["progress_percent"] = 100
+        revision_jobs[job_id]["message"] = "이미지 생성이 완료되었습니다."
+
+    except Exception as e:
+        revision_jobs[job_id]["status"] = "failed"
+        revision_jobs[job_id]["error"] = str(e)
+        revision_jobs[job_id]["current_page_number"] = None
+        revision_jobs[job_id]["message"] = "이미지 생성 중 오류가 발생했습니다."

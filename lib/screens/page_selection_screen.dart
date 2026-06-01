@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
 import 'scene_edit_screen.dart';
+import '../widgets/story_image_view.dart';
+
 
 // ═══════════════════════════════════════════════════════════════
 //  수정할 페이지 선택 화면
@@ -320,25 +322,9 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            page.imagePath,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            errorBuilder: (_, _, _) => Container(
-                              color: widget.tale.cardColor,
-                              child: Center(
-                                child: Text(
-                                  '${actualIndex + 1}',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: widget.tale.cardColor
-                                        .withOpacity(0.5),
-                                  ),
-                                ),
-                              ),
-                            ),
+                          child: StoryImageView(
+                              imagePath: page.imagePath,
+                              fit: BoxFit.cover,
                           ),
                         ),
                         // 페이지 번호
@@ -517,18 +503,9 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                     child: selectedPage != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.asset(
-                              selectedPage.imagePath,
+                            child: StoryImageView(
+                              imagePath: selectedPage.imagePath,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) => Center(
-                                child: Text(
-                                  '${(_selectedPageIndex! + 1)}',
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF7E57C2)),
-                                ),
-                              ),
                             ),
                           )
                         : const Icon(Icons.image_outlined,

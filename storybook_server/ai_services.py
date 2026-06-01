@@ -3,7 +3,7 @@ import json
 import base64
 import tempfile
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -377,16 +377,11 @@ def _normalize_spaces(text: str) -> str:
 
 
 def soften_risky_image_text(text: str) -> str:
-    """
-    텍스트 자체는 유지하되, 이미지용 묘사에서는 더 부드럽고 안전한 표현으로 변환한다.
-    특정 동화/플롯 번호 하드코딩이 아니라 표현 유형 기반으로 일반화.
-    """
     if not text:
         return ""
 
     result = text
 
-    # 독/위험 물질 계열
     replacements = [
         ("독이 든", "수상한 마법이 걸린"),
         ("독이든", "수상한 마법이 걸린"),
@@ -395,10 +390,6 @@ def soften_risky_image_text(text: str) -> str:
         ("독 오렌지", "마법이 걸린 오렌지"),
         ("독이 든 오렌지", "수상한 마법이 걸린 오렌지"),
         ("독이 든 사과", "수상한 마법이 걸린 사과"),
-    ]
-
-    # 쓰러짐 / 기절 / 죽음 유사
-    replacements += [
         ("먹고 쓰러진", "먹은 뒤 눈을 감고 조용히 누워 있는"),
         ("먹은 뒤 쓰러진", "먹은 뒤 눈을 감고 조용히 누워 있는"),
         ("쓰러지고 말았어요", "눈을 감고 조용히 누워 있었어요"),
@@ -412,23 +403,11 @@ def soften_risky_image_text(text: str) -> str:
         ("죽었다", "깊은 잠에 빠진 듯 보였다"),
         ("죽음", "긴 잠"),
         ("시체", "잠든 모습"),
-    ]
-
-    # 관/유리관
-    replacements += [
         ("유리관", "투명한 관"),
         ("관 속", "투명한 관 안"),
         ("관안", "투명한 관 안"),
-    ]
-
-    # 직접적인 접촉
-    replacements += [
         ("키스", "다정하게 가까이 다가감"),
         ("입맞춤", "다정한 인사"),
-    ]
-
-    # 강한 종결/처벌
-    replacements += [
         ("비참한 최후", "모든 마법이 사라진 뒤 이야기에서 멀어짐"),
         ("잔인한 최후", "이야기에서 멀어짐"),
     ]
@@ -452,17 +431,12 @@ def detect_risk_categories(text: str) -> Dict[str, bool]:
 
 
 def build_safe_image_scene_description(plot_summary: str, plot_content: str) -> str:
-    """
-    원문 텍스트는 유지하되, 이미지 프롬프트에 들어갈 장면 설명만 안전하게 만든다.
-    핵심 사건은 살리되, 직접적 위험 장면은 더 부드럽고 아동용 동화 스타일로 완화.
-    """
     original = _normalize_spaces(f"{plot_summary}. {plot_content}")
     softened_summary = soften_risky_image_text(plot_summary)
     softened_content = soften_risky_image_text(plot_content)
     softened = _normalize_spaces(f"{softened_summary}. {softened_content}")
     risks = detect_risk_categories(original)
 
-    # 여러 위험 요소가 있으면 "직전/직후의 안전한 순간"을 강조
     if risks["poison"] and risks["collapse"]:
         return (
             "숲속 오두막에서 수상한 마법이 걸린 과일을 들고 있는 인물과 "
@@ -828,6 +802,135 @@ def generate_plot_image_bytes(
 
         image_bytes, mime_type = _extract_image_bytes_from_image_generation_result(result)
         return image_bytes, mime_type, f"plot_{plot_number}.png"
+
+    finally:
+        for f in opened_files:
+            try:
+                f.close()
+            except Exception:
+                pass
+        for path in temp_paths:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+
+# =========================
+# 7. 페이지 이미지 생성
+# =========================
+def generate_story_page_image_prompt(
+    story_title: str,
+    page_number: int,
+    page_text: str,
+    style_reference_hint: Optional[str] = None,
+    required_changes: Optional[str] = None,
+) -> str:
+    style_hint_text = style_reference_hint or "기존 동화책 삽화와 동일하거나 매우 유사한 그림체"
+    required_changes_text = required_changes or "없음"
+
+    safe_page_text = soften_risky_image_text(page_text)
+    safe_required_changes = soften_risky_image_text(required_changes_text)
+
+    prompt = f"""
+Create a child-safe illustrated storybook page.
+
+Important rules:
+- Match the reference storybook style as closely as possible.
+- Keep the same linework, coloring style, character proportions, facial style, and overall atmosphere.
+- This should look like one page of a children's fairy tale picture book.
+- Show only one clear page scene.
+- Keep all characters fully clothed, child-safe, calm, and gentle.
+- If the page implies danger or magical harm, visualize it in a softer fairy-tale way.
+- No graphic harm, no visible suffering, no horror mood, no text in the image.
+
+Story title:
+{story_title}
+
+Page number:
+{page_number}
+
+Page text:
+{safe_page_text}
+
+Required change to preserve:
+{safe_required_changes}
+
+Style reference:
+{style_hint_text}
+
+Return only one clean image-generation prompt paragraph.
+""".strip()
+
+    return call_text_model(
+        prompt,
+        instructions=(
+            "You write safe, high-quality prompts for children's storybook illustration generation. "
+            "Preserve the story event, but phrase it in a softer and child-safe visual way."
+        )
+    )
+
+
+def generate_story_page_image_bytes(
+    image_prompt: str,
+    page_number: int,
+    reference_images: Optional[List[Dict[str, Any]]] = None,
+) -> tuple[bytes, str, str]:
+    client = _get_openai_client()
+
+    temp_paths: List[str] = []
+    opened_files = []
+
+    try:
+        if reference_images:
+            for ref in reference_images[:3]:
+                if not ref.get("image_data"):
+                    continue
+                ref_path = _bytes_to_temp_file(ref["image_data"], ref.get("mime_type"))
+                temp_paths.append(ref_path)
+                opened_files.append(open(ref_path, "rb"))
+
+        try:
+            if opened_files:
+                result = client.images.edit(
+                    model=OPENAI_IMAGE_MODEL,
+                    image=opened_files,
+                    prompt=image_prompt,
+                    size="1024x1024",
+                )
+            else:
+                result = client.images.generate(
+                    model=OPENAI_IMAGE_MODEL,
+                    prompt=image_prompt,
+                    size="1024x1024",
+                )
+        except Exception as e:
+            print("Story page image prompt blocked or failed:", repr(e))
+
+            safer_prompt = (
+                f"{image_prompt}\n\n"
+                "Make the image clearly child-safe, peaceful, magical, and gentle. "
+                "Represent only one simple fairy-tale page scene. "
+                "All characters must appear safe, calm, fully clothed, and child-appropriate. "
+                "Avoid graphic harm, visible suffering, fear, or dark realistic mood."
+            )
+
+            if opened_files:
+                result = client.images.edit(
+                    model=OPENAI_IMAGE_MODEL,
+                    image=opened_files,
+                    prompt=safer_prompt,
+                    size="1024x1024",
+                )
+            else:
+                result = client.images.generate(
+                    model=OPENAI_IMAGE_MODEL,
+                    prompt=safer_prompt,
+                    size="1024x1024",
+                )
+
+        image_bytes, mime_type = _extract_image_bytes_from_image_generation_result(result)
+        return image_bytes, mime_type, f"page_{page_number}_generated.png"
 
     finally:
         for f in opened_files:
