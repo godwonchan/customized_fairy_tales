@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static const String baseUrl = 'http://localhost:8000';
 
   static Future<List<dynamic>> getOriginalStories() async {
     final response = await http.get(Uri.parse('$baseUrl/stories/original'));
