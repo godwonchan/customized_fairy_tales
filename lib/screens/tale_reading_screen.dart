@@ -392,73 +392,51 @@ void _goNext() {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () {
-              _flutterTts.stop();
-              Navigator.pop(context);
-            },
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                  color: const Color(0xFFF8F4FF),
-                  borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.chevron_left,
-                  color: Color(0xFF7E57C2), size: 22),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('동화 읽기',
-                      style: TextStyle(
-                          fontSize: isTablet ? 18 : 16,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF3D2C8D))),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF7E57C2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.menu_book,
-                        size: 14, color: Colors.white),
-                  ),
-                ],
-              ),
-              Text('이야기를 처음부터 끝까지 읽어보아요.',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
             onTap: _togglePlay,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: _isPlaying
-                    ? const Color(0xFF7E57C2)
-                    : const Color(0xFFF8F4FF),
+                color: _isPlaying ? const Color(0xFF7E57C2) : Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE0D7F5)),
+                border: Border.all(color: const Color(0xFF7E57C2), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7E57C2).withOpacity(0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ],
               ),
               child: Row(
                 children: [
                   Icon(
-                    _isPlaying ? Icons.pause_rounded : Icons.volume_up_rounded,
-                    size: 16,
+                    _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                    size: 20,
                     color: _isPlaying ? Colors.white : const Color(0xFF7E57C2),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _isPlaying ? '일시정지' : '읽어주기',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: _isPlaying ? Colors.white : const Color(0xFF7E57C2),
-                        fontWeight: FontWeight.w500),
+                  const SizedBox(width: 6),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _isPlaying ? '일시정지' : '읽어주기',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _isPlaying ? Colors.white : const Color(0xFF7E57C2),
+                        ),
+                      ),
+                      Text(
+                        _isPlaying ? '탭하면 멈춰요' : 'AI가 읽어드려요',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: _isPlaying
+                              ? Colors.white.withOpacity(0.8)
+                              : Colors.grey[400],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -506,10 +484,10 @@ void _goNext() {
       onPageChanged: (index) => setState(() => _currentPageIndex = index),
       itemBuilder: (context, index) {
         final page = _taleBook!.pages[index];
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: _buildTabletPageContent(page),
-        );
+       return Padding(
+        padding: const EdgeInsets.all(16),
+        child: _buildTabletPageContent(page),
+      );
       },
     );
   }
@@ -657,28 +635,24 @@ void _goNext() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEDE7F6),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '${page.pageNumber} / ${_taleBook!.totalPages}',
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF7E57C2),
-                    fontWeight: FontWeight.w600),
-              ),
+       Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDE7F6),
+              borderRadius: BorderRadius.circular(20),
             ),
-            const Spacer(),
-            Icon(Icons.list_rounded, size: 22, color: Colors.grey[400]),
-            const SizedBox(width: 12),
-            Icon(Icons.favorite_border, size: 22, color: Colors.grey[400]),
-          ],
-        ),
+            child: Text(
+              '${page.pageNumber} / ${_taleBook!.totalPages}',
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF7E57C2),
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
         const SizedBox(height: 14),
         Text(
           widget.tale.title,
@@ -907,124 +881,124 @@ void _goNext() {
     );
   }
 
-  // ── 하단 썸네일 바 ──
-  Widget _buildThumbnailBar(bool isTablet) {
-    if (_taleBook == null) return const SizedBox.shrink();
+ Widget _buildThumbnailBar(bool isTablet) {
+  if (_taleBook == null) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, -2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.grid_view_rounded,
-                  size: 16, color: Color(0xFF7E57C2)),
-              const SizedBox(width: 6),
-              const Text('전체 페이지',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF3D2C8D))),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: isTablet ? 80 : 72,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _taleBook!.totalPages,
-              itemBuilder: (context, index) {
-                final isSelected = _currentPageIndex == index;
-                final page = _taleBook!.pages[index];
+  return Container(
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2)),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.grid_view_rounded,
+                size: 16, color: Color(0xFF7E57C2)),
+            const SizedBox(width: 6),
+            const Text('전체 페이지',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF3D2C8D))),
+          ],
+        ),
+      const SizedBox(height: 10),
+        SizedBox(
+          height: 72,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_taleBook!.totalPages, (index) {
+              final isSelected = _currentPageIndex == index;
+              final page = _taleBook!.pages[index];
 
-                return GestureDetector(
-                  onTap: () {
-                    _flutterTts.stop();
-                    setState(() {
-                      _isPlaying = false;
-                      _currentPageIndex = index;
-                    });
-                    _pageFlipController.forward(from: 0);
-                    _pageController?.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: isTablet ? 56 : 50,
-                          height: isTablet ? 52 : 46,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF7E57C2)
-                                  : Colors.transparent,
-                              width: 2.5,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(0xFF7E57C2)
-                                          .withOpacity(0.3),
-                                      blurRadius: 8,
-                                    )
-                                  ]
-                                : [],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: StoryImageView(
-                              imagePath: page.imagePath,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          width: 20, height: 20,
-                          decoration: BoxDecoration(
+              return GestureDetector(
+                onTap: () {
+                  _flutterTts.stop();
+                  setState(() {
+                    _isPlaying = false;
+                    _currentPageIndex = index;
+                  });
+                  _pageFlipController.forward(from: 0).then((_) {
+                    _pageFlipController.reverse();
+                  });
+                  _pageController?.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
                             color: isSelected
                                 ? const Color(0xFF7E57C2)
                                 : Colors.transparent,
-                            shape: BoxShape.circle,
+                            width: 2.5,
                           ),
-                          child: Center(
-                            child: Text('${index + 1}',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.grey[400],
-                                  fontWeight: FontWeight.w600,
-                                )),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(0xFF7E57C2)
+                                        .withOpacity(0.3),
+                                    blurRadius: 8,
+                                  )
+                                ]
+                              : [],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: StoryImageView(
+                            imagePath: page.imagePath,
+                            fit: BoxFit.cover,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 20, height: 20,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF7E57C2)
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text('${index + 1}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.grey[400],
+                                fontWeight: FontWeight.w600,
+                              )),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   // ── 하단 액션 바 ──
   Widget _buildBottomBar(bool isTablet, bool isLastPage) {
