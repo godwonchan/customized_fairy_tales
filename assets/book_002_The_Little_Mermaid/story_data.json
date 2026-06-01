@@ -1,0 +1,36 @@
+{
+  "title": "인어공주",
+  "description": "인간이 되고 싶었던 인어공주의 슬픈 이야기",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_01.png",
+      "text": "깊은 바닷속 왕국에 아름다운 인어 공주가 살고 있었었습니다. 그녀는 인간 세상에 대한 호기심이 많았답니다."
+    },
+    {
+      "pageNumber": 2,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_02.png",
+      "text": "어느 날, 인어공주는 바다 위로 올라갔다가 폭풍 속에서 한 왕자를 구해주게 되었습니다. 그 순간… 공주는 왕자를 사랑하게 되어버렸습니다."
+    },
+    {
+      "pageNumber": 3,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_03.png",
+      "text": "왕자를 만나고 싶었던 공주는 바다 마녀를 찾아갔답니다. 마녀는 이렇게 말했어요. "목소리를 빼앗는 대신 인간의 다리를 주겠어. 하지만 왕자가 너를 사랑해서 결혼하지 않으면… 넌 거품이 되어 사라질 것이다!" 공주는 결국 모든 걸 감수하고 인간이 되기로 했습니다."
+    },
+    {
+      "pageNumber": 4,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_04.png",
+      "text": "공주는 왕자 곁에 머물지만, 말을 할 수 없어서 자신의 마음을 전하지 못했어요. 왕자는 결국 다른 공주와 결혼하게 되었답니다."
+    },
+    {
+      "pageNumber": 5,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_05.png",
+      "text": "왕자와 결혼하지 못한다면 물거품이 될 것이라는 마녀의 말대로, 인어공주는 죽음을 앞두게 되었습니다. 그러던 중 언니들이 찾아와서 말했어요. "왕자를 죽이면 다시 인어로 돌아올 수 있어""
+    },
+    {
+      "pageNumber": 6,
+      "imagePath": "assets/book_002_The_Little_Mermaid/The_Little_Mermaid_06.png",
+      "text": "하지만 인어공주는 차마 왕자를 해칠 수 없었습니다. 결국 공주는 바다의 거품이 되어 사라지고 말았답니다."
+    }
+  ]
+}
