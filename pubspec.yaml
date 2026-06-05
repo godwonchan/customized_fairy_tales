@@ -1,0 +1,33 @@
+name: fairytale_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  http: ^1.2.0
+  flutter_tts: ^4.0.2
+  http_parser: ^4.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/cover.png
+    - assets/book_001_Snow_White/
+    - assets/background.png
+    - assets/girl_wolf.png
+    - assets/book01.png
+    - assets/posion01.png
+    - assets/star01.png
+  
