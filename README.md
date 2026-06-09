@@ -1,17 +1,17 @@
-# fairytale_app
+# AI 기반 아동 맞춤형 동화 생성 시스템
 
-A new Flutter project.
+## 프로젝트 소개
+본 프로젝트는 생성형 AI와 드로잉 입력을 결합하여,  
+아동이 기존 동화에 직접 개입하고 이후 이야기를 새롭게 재구성할 수 있도록 하는 참여형 동화 창작 시스템입니다.
 
-## Getting Started
+기존 AI 동화 서비스는 대부분 텍스트 입력 기반이라 미취학 아동이나 초등 저학년이 사용하기 어렵다는 한계가 있습니다.  
+이를 해결하기 위해, 사용자가 텍스트 대신 그림으로 수정 의도를 표현하면 AI가 이를 해석하여 스토리와 삽화를 함께 재구성하도록 구현했습니다.
 
-This project is a starting point for a Flutter application.
+### 핵심 기능
+- 기존 동화 읽기
+- 수정할 장면 선택
+- 그림 기반 수정 의도 입력
+- AI 기반 스토리 및 이미지 재생성
+- 결과 확인 후 제목 입력 저장
+- 나의 책장에서 다시 열람 및 재수정
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
