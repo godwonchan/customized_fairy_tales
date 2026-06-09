@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
+=======
+import 'package:flutter/cupertino.dart';
+>>>>>>> wonchan_ui_fixed
 import 'package:provider/provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/favorites_provider.dart';
@@ -24,12 +28,22 @@ class MyApp extends StatelessWidget {
         fontFamily: 'NotoSansKR',
         scaffoldBackgroundColor: const Color(0xFFF8F4FF),
         colorScheme: ColorScheme.fromSeed(
+<<<<<<< HEAD
             seedColor: const Color(0xFFB39DDB)),
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
             TargetPlatform.android: CupertinoPageTransitionsBuilder(),
             TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
             TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+=======
+          seedColor: const Color(0xFFB39DDB),
+        ),
+        pageTransitionsTheme: PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: const CupertinoPageTransitionsBuilder(),
+            TargetPlatform.windows: const CupertinoPageTransitionsBuilder(),
+>>>>>>> wonchan_ui_fixed
           },
         ),
       ),

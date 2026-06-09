@@ -13,6 +13,7 @@ dependencies:
   provider: ^6.1.2
   http: ^1.2.0
   flutter_tts: ^4.0.2
+  http_parser: ^4.0.2
 
 dev_dependencies:
   flutter_test:
@@ -22,7 +23,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/
+    - assets/cover.png
+    - assets/background.png
+    - assets/girl_wolf.png
+    - assets/book01.png
+    - assets/posion01.png
+    - assets/star01.png
     - assets/book_001_Snow_White/
-
-  
+    - assets/book_002_The_Little_Mermaid/
+    - assets/book_003_Cinderella/
