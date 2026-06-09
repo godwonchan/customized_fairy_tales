@@ -415,23 +415,32 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              ElevatedButton(
-                onPressed: _selectedPageIndex != null
+              GestureDetector(
+                onTap: _selectedPageIndex != null
                     ? () => Navigator.push(context, MaterialPageRoute(
                             builder: (_) => SceneEditScreen(tale: widget.tale, taleBook: widget.taleBook, selectedPageIndex: _selectedPageIndex!)))
                     : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7E57C2), foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey[200],
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+                  decoration: BoxDecoration(
+                    gradient: _selectedPageIndex != null
+                        ? const LinearGradient(colors: [Color(0xFF9575CD), Color(0xFF7E57C2)])
+                        : null,
+                    color: _selectedPageIndex == null ? Colors.grey[200] : null,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: _selectedPageIndex != null ? [
+                      BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 5)),
+                    ] : [],
+                  ),
+                  child: Row(children: [
+                    Text('이 장면을 선택하고 수정하기로 이동',
+                        style: TextStyle(fontSize: isTablet ? 14 : 13, fontWeight: FontWeight.w600,
+                            color: _selectedPageIndex != null ? Colors.white : Colors.grey[400])),
+                    const SizedBox(width: 8),
+                    Icon(Icons.arrow_forward, size: 16,
+                        color: _selectedPageIndex != null ? Colors.white : Colors.grey[400]),
+                  ]),
                 ),
-                child: Row(children: [
-                  Text('이 장면을 선택하고 수정하기로 이동',
-                      style: TextStyle(fontSize: isTablet ? 14 : 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward, size: 16),
-                ]),
               ),
               const SizedBox(height: 8),
               TextButton(
