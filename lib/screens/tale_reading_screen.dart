@@ -317,7 +317,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
             ),
           ),
           const SizedBox(width: 8),
-          _headerBtn(Icons.list_rounded, '목차', () {}),
+          _headerBtn(Icons.list_rounded, '목차', () => Navigator.pop(context)),
           const SizedBox(width: 8),
           _headerBtn(Icons.text_fields_rounded, '가 글자 크기', _showFontSizeDialog),
         ],
