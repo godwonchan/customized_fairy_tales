@@ -332,7 +332,12 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
     return Container(
       padding: EdgeInsets.all(isTablet ? 20 : 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFF5F0FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border(top: BorderSide(color: const Color(0xFFEDE7F6), width: 1.5)),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: Row(
