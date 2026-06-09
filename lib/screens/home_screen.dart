@@ -236,7 +236,9 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildTopBar() {
     return Row(
       children: [
-        Expanded(
+        // 검색창 너비 고정 (숫자로 조절)
+        SizedBox(
+          width: 480,
           child: Container(
             height: 52,
             decoration: BoxDecoration(
@@ -267,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
