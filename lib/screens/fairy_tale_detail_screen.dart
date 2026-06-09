@@ -125,15 +125,10 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
                 style: const TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w600)),
           ),
           const SizedBox(height: 10),
-          // ✅ 커밋2: 별점 추가
           Row(
             children: List.generate(5, (i) => Padding(
               padding: const EdgeInsets.only(right: 2),
-              child: Icon(
-                Icons.star_rounded,
-                size: 20,
-                color: i < 4 ? const Color(0xFFFFB300) : Colors.grey[300],
-              ),
+              child: Icon(Icons.star_rounded, size: 20, color: i < 4 ? const Color(0xFFFFB300) : Colors.grey[300]),
             )),
           ),
           const SizedBox(height: 16),
@@ -150,20 +145,31 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             child: Row(children: [_infoItem('카테고리', tale.category), _divider(), _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본')]),
           ),
           const SizedBox(height: 28),
+          // ✅ 커밋3: 읽기 버튼 그라디언트 + 아이콘
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.push(context,
+            child: GestureDetector(
+              onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: tale, initialPage: 0))),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF7E57C2),
-                foregroundColor: Colors.white,
+              child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF9575CD), Color(0xFF7E57C2)]),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6)),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.menu_book_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Text('이 동화 읽기',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ],
+                ),
               ),
-              child: Text('이 동화 읽기',
-                  style: TextStyle(fontSize: isTablet ? 17 : 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
