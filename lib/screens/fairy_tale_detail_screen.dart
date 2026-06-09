@@ -135,6 +135,7 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           Text(tale.description,
               style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7)),
           const SizedBox(height: 24),
+          // ✅ 커밋4: 정보 카드 뱃지 스타일
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -145,7 +146,6 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             child: Row(children: [_infoItem('카테고리', tale.category), _divider(), _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본')]),
           ),
           const SizedBox(height: 28),
-          // ✅ 커밋3: 읽기 버튼 그라디언트 + 아이콘
           SizedBox(
             width: double.infinity,
             child: GestureDetector(
@@ -156,17 +156,14 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(colors: [Color(0xFF9575CD), Color(0xFF7E57C2)]),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6)),
-                  ],
+                  boxShadow: [BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
                 ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.menu_book_rounded, color: Colors.white, size: 20),
                     SizedBox(width: 10),
-                    Text('이 동화 읽기',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    Text('이 동화 읽기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                   ],
                 ),
               ),
@@ -208,13 +205,22 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     );
   }
 
+  // ✅ 커밋4: 뱃지 스타일로 변경
   Widget _infoItem(String label, String value) {
     return Expanded(
       child: Column(
         children: [
           Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D))),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEDE7F6),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(value,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF7E57C2))),
+          ),
         ],
       ),
     );
