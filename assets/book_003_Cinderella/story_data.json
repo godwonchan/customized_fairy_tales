@@ -1,0 +1,41 @@
+{
+  "title": "신데렐라",
+  "description": "신데렐라와 마법의 유리구두 이야기",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_01.png",
+      "text": "옛날옛날, 신데렐라라는 소녀가 살았답니다. 착한 신데렐라는 아버지가 돌아가신 후, 새어머니와 시샘 많은 두 언니 밑에서 온갖 집안일을 도맡아 하며 구박을 받았습니다."
+    },
+    {
+      "pageNumber": 2,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_02.png",
+      "text": "어느 날 왕궁에서 왕자의 신붓감을 찾기 위한 대형 무도회가 열립니다. 언니들은 한껏 꾸미고 무도회에 갈 준비를 했지만, 신데렐라는 집안일 때문에 못 가게 되어 슬퍼했어요."
+    },
+    {
+      "pageNumber": 3,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_03.png",,
+      "text": "이때 요정 할머니가 나타나 마법을 부려주었어요. 호박을 황금 마차로 바꿔 주었고, 생쥐를 말과 마부로 만들어 주었으며, 신데렐라의 누더기 옷은 화려한 드레스와 유리구두가 되었어요. 단, 조건이 있었습니다. 마법은 밤 12시가 되면 풀린다는 것이었죠."
+    },
+    {
+      "pageNumber": 4,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_04.png",
+      "text": "무도회장에 나타난 신데렐라를 보고 왕자는 첫눈에 반해 밤새 춤을 춥니다. 신데렐라는 정말 행복했어요."
+    },
+    {
+      "pageNumber": 5,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_05.png",
+      "text": "정신없이 무도회를 즐기다 보니 어느새 밤 12시를 알리는 종이 울리기 시작하고, 깜짝 놀란 신데렐라는 도망치듯 궁전을 빠져나오다 계단에 유리구두 한 짝을 떨어뜨리고 말았습니다."
+    },
+    {
+      "pageNumber": 6,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_06.png",
+      "text": "왕자는 이 유리구두의 주인을 찾기 위해 온 나라를 뒤지기 시작했어요. 신데렐라가 질투났던 두 언니는 구두에 발을 억지로 구겨 넣으려 하지만 실패하고, 마지막으로 신데렐라가 신어보자, 발에 아주 완벽하게 딱 들어맞았습니다."
+},
+    {
+      "pageNumber": 7,
+      "imagePath": "assets/book_003_Cinderella/Cinderella_07.png",
+      "text": "결국 신데렐라는 왕자와 함께 왕궁으로 돌아가 아름다운 결혼식을 올렸고, 오래오래 행복하게 잘 살았답니다."
+    }
+  ]
+}
