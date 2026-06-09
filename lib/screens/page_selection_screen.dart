@@ -149,9 +149,14 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
       margin: EdgeInsets.all(isTablet ? 20 : 14),
       padding: EdgeInsets.all(isTablet ? 16 : 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFAF8FF), Color(0xFFEDE7F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD8CCFF), width: 1.5),
+        boxShadow: [BoxShadow(color: const Color(0xFF9575CD).withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
