@@ -36,8 +36,18 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
-      body: SafeArea(
+      backgroundColor: const Color(0xFFF0EEFF),
+      body: Stack(
+        children: [
+          Positioned(top: -60, right: -60,
+            child: Container(width: 200, height: 200,
+              decoration: BoxDecoration(shape: BoxShape.circle,
+                  color: const Color(0xFF9575CD).withOpacity(0.07)))),
+          Positioned(bottom: -80, left: -40,
+            child: Container(width: 220, height: 220,
+              decoration: BoxDecoration(shape: BoxShape.circle,
+                  color: const Color(0xFFEC407A).withOpacity(0.05)))),
+          SafeArea(
         child: Column(
           children: [
             _buildHeader(context, isTablet),
@@ -47,6 +57,8 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
             _buildBottomPreview(isTablet),
           ],
         ),
+      ),
+        ],
       ),
     );
   }
