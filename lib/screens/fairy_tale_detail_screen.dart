@@ -27,13 +27,11 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _fadeAnim =
-        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.08),
       end: Offset.zero,
-    ).animate(
-        CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
   }
 
@@ -68,12 +66,19 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             tag: 'tale_${tale.title}',
             child: Container(
               margin: const EdgeInsets.all(24),
+              // ✅ 커밋1: 그림자 + 둥근 모서리 개선
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                color: tale.cardColor,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7E57C2).withOpacity(0.25),
+                    blurRadius: 30,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(28),
                 child: StoryImageView(
                   imagePath: tale.imagePath,
                   fit: BoxFit.cover,
@@ -132,8 +137,7 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   }
 
   // ── 공통 정보 패널 ──
-  Widget _buildInfoPanel(BuildContext context, FairyTale tale,
-      {required bool isTablet}) {
+  Widget _buildInfoPanel(BuildContext context, FairyTale tale, {required bool isTablet}) {
     return Padding(
       padding: EdgeInsets.all(isTablet ? 32 : 20),
       child: Column(
@@ -146,10 +150,8 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             ),
             const SizedBox(height: 24),
           ],
-          Text('동화 상세',
-              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          Text('동화 상세', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
           const SizedBox(height: 12),
-          // 제목
           Text(
             tale.title,
             style: TextStyle(
@@ -159,7 +161,6 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             ),
           ),
           const SizedBox(height: 12),
-          // 카테고리 뱃지
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
@@ -168,33 +169,22 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             ),
             child: Text(
               tale.category,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF7E57C2),
-                  fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 20),
-          // 줄거리
           Text(
             tale.description,
-            style: TextStyle(
-                fontSize: isTablet ? 16 : 14,
-                color: Colors.grey[700],
-                height: 1.7),
+            style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7),
           ),
           const SizedBox(height: 24),
-         // 정보 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2))
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
               ],
             ),
             child: Row(
@@ -206,33 +196,22 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             ),
           ),
           const SizedBox(height: 28),
-          // 이 동화 읽기 버튼
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TaleReadingScreen(
-                      tale: tale,
-                      initialPage: 0,
-                    ),
-                  ),
-                );
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: tale, initialPage: 0)));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7E57C2),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
               child: Text('이 동화 읽기',
-                  style: TextStyle(
-                      fontSize: isTablet ? 17 : 15,
-                      fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: isTablet ? 17 : 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -248,15 +227,9 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.9),
           borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
         ),
-        child: const Icon(Icons.chevron_left,
-            color: Color(0xFF7E57C2), size: 22),
+        child: const Icon(Icons.chevron_left, color: Color(0xFF7E57C2), size: 22),
       ),
     );
   }
@@ -269,19 +242,12 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.9),
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Icon(
           _isFavorite ? Icons.favorite : Icons.favorite_border,
           size: 18,
-          color: _isFavorite
-              ? const Color(0xFFE91E63)
-              : Colors.grey[400],
+          color: _isFavorite ? const Color(0xFFE91E63) : Colors.grey[400],
         ),
       ),
     );
@@ -291,14 +257,9 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     return Expanded(
       child: Column(
         children: [
-          Text(label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
           const SizedBox(height: 4),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF3D2C8D))),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D))),
         ],
       ),
     );
