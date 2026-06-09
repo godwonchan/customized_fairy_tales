@@ -15,3 +15,15 @@
 - 결과 확인 후 제목 입력 저장
 - 나의 책장에서 다시 열람 및 재수정
 
+## 초기 설정
+
+### 1. 필수 설치
+- Flutter SDK
+- Python 3.x
+- Git
+- Chrome 또는 Android Studio
+
+### 2. Flutter 실행
+```bash
+flutter pub get
+flutter run -d chrome
