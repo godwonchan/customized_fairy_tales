@@ -5,7 +5,6 @@ import '../widgets/story_image_view.dart';
 
 class FairyTaleDetailScreen extends StatefulWidget {
   final FairyTale tale;
-
   const FairyTaleDetailScreen({super.key, required this.tale});
 
   @override
@@ -23,15 +22,10 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   void initState() {
     super.initState();
     _isFavorite = widget.tale.isFavorite;
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
   }
 
@@ -45,18 +39,14 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
     final tale = widget.tale;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4FF),
       body: SafeArea(
-        child: isTablet
-            ? _buildTabletLayout(context, tale)
-            : _buildPhoneLayout(context, tale),
+        child: isTablet ? _buildTabletLayout(context, tale) : _buildPhoneLayout(context, tale),
       ),
     );
   }
 
-  // ── 태블릿 레이아웃 ──
   Widget _buildTabletLayout(BuildContext context, FairyTale tale) {
     return Row(
       children: [
@@ -66,23 +56,13 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             tag: 'tale_${tale.title}',
             child: Container(
               margin: const EdgeInsets.all(24),
-              // ✅ 커밋1: 그림자 + 둥근 모서리 개선
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF7E57C2).withOpacity(0.25),
-                    blurRadius: 30,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
+                boxShadow: [BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.25), blurRadius: 30, offset: const Offset(0, 12))],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(28),
-                child: StoryImageView(
-                  imagePath: tale.imagePath,
-                  fit: BoxFit.cover,
-                ),
+                child: StoryImageView(imagePath: tale.imagePath, fit: BoxFit.cover),
               ),
             ),
           ),
@@ -91,17 +71,13 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           flex: 5,
           child: FadeTransition(
             opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: _buildInfoPanel(context, tale, isTablet: true),
-            ),
+            child: SlideTransition(position: _slideAnim, child: _buildInfoPanel(context, tale, isTablet: true)),
           ),
         ),
       ],
     );
   }
 
-  // ── 폰 레이아웃 ──
   Widget _buildPhoneLayout(BuildContext context, FairyTale tale) {
     return SingleChildScrollView(
       child: Column(
@@ -111,14 +87,8 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             children: [
               Hero(
                 tag: 'tale_${tale.title}',
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 300,
-                  child: StoryImageView(
-                    imagePath: tale.imagePath,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                child: SizedBox(width: double.infinity, height: 300,
+                    child: StoryImageView(imagePath: tale.imagePath, fit: BoxFit.cover)),
               ),
               Positioned(top: 12, left: 16, child: _backButton()),
               Positioned(top: 12, right: 16, child: _favoriteButton()),
@@ -126,17 +96,13 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           ),
           FadeTransition(
             opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: _buildInfoPanel(context, tale, isTablet: false),
-            ),
+            child: SlideTransition(position: _slideAnim, child: _buildInfoPanel(context, tale, isTablet: false)),
           ),
         ],
       ),
     );
   }
 
-  // ── 공통 정보 패널 ──
   Widget _buildInfoPanel(BuildContext context, FairyTale tale, {required bool isTablet}) {
     return Padding(
       padding: EdgeInsets.all(isTablet ? 32 : 20),
@@ -144,65 +110,51 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isTablet) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [_backButton(), _favoriteButton()],
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_backButton(), _favoriteButton()]),
             const SizedBox(height: 24),
           ],
           Text('동화 상세', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
           const SizedBox(height: 12),
-          Text(
-            tale.title,
-            style: TextStyle(
-              fontSize: isTablet ? 32 : 26,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF3D2C8D),
-            ),
-          ),
+          Text(tale.title,
+              style: TextStyle(fontSize: isTablet ? 32 : 26, fontWeight: FontWeight.w700, color: const Color(0xFF3D2C8D))),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE7F6),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              tale.category,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w600),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(20)),
+            child: Text(tale.category,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w600)),
           ),
-          const SizedBox(height: 20),
-          Text(
-            tale.description,
-            style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7),
+          const SizedBox(height: 10),
+          // ✅ 커밋2: 별점 추가
+          Row(
+            children: List.generate(5, (i) => Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: Icon(
+                Icons.star_rounded,
+                size: 20,
+                color: i < 4 ? const Color(0xFFFFB300) : Colors.grey[300],
+              ),
+            )),
           ),
+          const SizedBox(height: 16),
+          Text(tale.description,
+              style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7)),
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
             ),
-            child: Row(
-              children: [
-                _infoItem('카테고리', tale.category),
-                _divider(),
-                _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본'),
-              ],
-            ),
+            child: Row(children: [_infoItem('카테고리', tale.category), _divider(), _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본')]),
           ),
           const SizedBox(height: 28),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: tale, initialPage: 0)));
-              },
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: tale, initialPage: 0))),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF7E57C2),
                 foregroundColor: Colors.white,
@@ -244,11 +196,8 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           shape: BoxShape.circle,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
         ),
-        child: Icon(
-          _isFavorite ? Icons.favorite : Icons.favorite_border,
-          size: 18,
-          color: _isFavorite ? const Color(0xFFE91E63) : Colors.grey[400],
-        ),
+        child: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border,
+            size: 18, color: _isFavorite ? const Color(0xFFE91E63) : Colors.grey[400]),
       ),
     );
   }
@@ -265,7 +214,5 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     );
   }
 
-  Widget _divider() {
-    return Container(width: 1, height: 32, color: Colors.grey[200]);
-  }
+  Widget _divider() => Container(width: 1, height: 32, color: Colors.grey[200]);
 }
