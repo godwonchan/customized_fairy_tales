@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
 import 'scene_edit_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/story_image_view.dart';
 
 class PageSelectionScreen extends StatefulWidget {
@@ -104,11 +105,14 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE0D7F5)),
             ),
-            child: Row(children: const [
-              Icon(Icons.lightbulb_outline, size: 14, color: Color(0xFF7E57C2)),
-              SizedBox(width: 4),
-              Text('선택 가이드', style: TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w500)),
-            ]),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              child: Row(children: const [
+                Icon(Icons.lightbulb_outline, size: 14, color: Color(0xFF7E57C2)),
+                SizedBox(width: 4),
+                Text('선택 가이드', style: TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w500)),
+              ]),
+            ),
           ),
         ],
       ),
