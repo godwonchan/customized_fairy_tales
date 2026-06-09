@@ -399,8 +399,11 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
           height: isTablet ? double.infinity : 300,
           decoration: BoxDecoration(
             color: widget.tale.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))],
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.2), blurRadius: 24, offset: const Offset(0, 10)),
+              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 4)),
+            ],
           ),
           child: ClipRRect(borderRadius: BorderRadius.circular(20), child: StoryImageView(imagePath: page.imagePath, fit: BoxFit.cover)),
         ),
