@@ -578,8 +578,9 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+        color: const Color(0xFFF8F4FF),
+        border: Border(top: BorderSide(color: const Color(0xFFEDE7F6), width: 1.5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
