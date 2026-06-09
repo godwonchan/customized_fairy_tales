@@ -637,7 +637,16 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
   Widget _buildBottomBar(bool isTablet, bool isLastPage) {
     return Container(
       padding: EdgeInsets.fromLTRB(isTablet ? 24 : 16, 12, isTablet ? 24 : 16, 12),
-      color: Colors.white,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFF5F0FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2)),
+        ],
+      ),
       child: Row(
         children: [
           Container(width: 40, height: 40,
