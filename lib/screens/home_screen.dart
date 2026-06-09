@@ -344,22 +344,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Text('상상력을 더해 세상에 하나뿐인\n동화를 만들어보세요!',
                       style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.75), height: 1.6)),
                   const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () => _navigateToTaleList(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFFFFB300), Color(0xFFFF8F00)]),
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [BoxShadow(color: const Color(0xFFFF8F00).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
-                      ),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('이야기 만들기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                        SizedBox(width: 8),
-                        Icon(Icons.auto_fix_high_rounded, size: 16, color: Colors.white),
-                      ]),
-                    ),
-                  ),
+                  _FloatingButton(onTap: _navigateToTaleList),
                 ],
               ),
             ),
@@ -660,5 +645,78 @@ class _HomeScreenState extends State<HomeScreen>
         child: FadeTransition(opacity: animation, child: child),
       ),
     ));
+  }
+}
+
+// ─── 둥실둥실 애니메이션 버튼 ───
+class _FloatingButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _FloatingButton({required this.onTap});
+
+  @override
+  State<_FloatingButton> createState() => _FloatingButtonState();
+}
+
+class _FloatingButtonState extends State<_FloatingButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _floatAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+
+    _floatAnim = Tween<double>(begin: 0, end: -8).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _floatAnim,
+      builder: (_, child) => Transform.translate(
+        offset: Offset(0, _floatAnim.value),
+        child: child,
+      ),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+            ),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF8F00).withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('이야기 만들기',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+              SizedBox(width: 8),
+              Icon(Icons.auto_fix_high_rounded, size: 16, color: Colors.white),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
