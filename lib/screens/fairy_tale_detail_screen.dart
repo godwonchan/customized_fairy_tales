@@ -39,10 +39,35 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
     final tale = widget.tale;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4FF),
-      body: SafeArea(
-        child: isTablet ? _buildTabletLayout(context, tale) : _buildPhoneLayout(context, tale),
+      body: Stack(
+        children: [
+          Positioned(
+            top: -60, right: -60,
+            child: Container(
+              width: 200, height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF9575CD).withOpacity(0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -80, left: -40,
+            child: Container(
+              width: 250, height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFEC407A).withOpacity(0.06),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: isTablet ? _buildTabletLayout(context, tale) : _buildPhoneLayout(context, tale),
+          ),
+        ],
       ),
     );
   }
@@ -135,7 +160,6 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           Text(tale.description,
               style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7)),
           const SizedBox(height: 24),
-          // ✅ 커밋4: 정보 카드 뱃지 스타일
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -205,7 +229,6 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     );
   }
 
-  // ✅ 커밋4: 뱃지 스타일로 변경
   Widget _infoItem(String label, String value) {
     return Expanded(
       child: Column(
@@ -214,10 +237,7 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEDE7F6),
-              borderRadius: BorderRadius.circular(20),
-            ),
+            decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(20)),
             child: Text(value,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF7E57C2))),
           ),
