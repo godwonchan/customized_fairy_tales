@@ -16,14 +16,23 @@ class StoryImageView extends StatelessWidget {
         imagePath.startsWith('https://');
   }
 
-  // ✅ 플랫폼에 맞게 URL 자동 교체
   String get _resolvedPath {
     if (!_isNetworkImage) return imagePath;
-    if (kIsWeb) return imagePath; // 크롬은 그대로
-    // 안드로이드 에뮬레이터: localhost → 10.0.2.2
-    return imagePath
-        .replaceFirst('http://localhost:', 'http://10.0.2.2:')
-        .replaceFirst('http://127.0.0.1:', 'http://10.0.2.2:');
+
+    // 웹(크롬)은 그대로
+    if (kIsWeb) return imagePath;
+
+    // 안드로이드 실제 기기 & 에뮬레이터 모두 처리
+    String resolved = imagePath;
+
+    // localhost → 192.168.219.110 (실제 기기용)
+    resolved = resolved.replaceFirst('http://localhost:', 'http://192.168.219.110:');
+    // 127.0.0.1 → 192.168.219.110
+    resolved = resolved.replaceFirst('http://127.0.0.1:', 'http://192.168.219.110:');
+    // 10.0.2.2 → 192.168.219.110
+    resolved = resolved.replaceFirst('http://10.0.2.2:', 'http://192.168.219.110:');
+
+    return resolved;
   }
 
   @override

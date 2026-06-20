@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Session, select
 
+
+
 from app_core import (
     engine,
     Story,
@@ -63,6 +65,9 @@ from ai_services import (
 print("### LOADED UPDATED MAIN.PY ###")
 
 app = FastAPI(title="Storybook Server")
+
+from routers.story_creation import router as story_creation_router
+app.include_router(story_creation_router)
 
 app.add_middleware(
     CORSMiddleware,
