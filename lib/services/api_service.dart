@@ -10,7 +10,7 @@ class ApiService {
     if (kIsWeb) {
       return 'http://localhost:8000'; // 크롬
     }
-    return 'http://192.168.219.110:8000'; // 갤럭시 탭 실제 기기
+    return 'http://localhost:8000'; // 갤럭시 탭 실제 기기
   }
 
   static Future<List<dynamic>> getOriginalStories() async {

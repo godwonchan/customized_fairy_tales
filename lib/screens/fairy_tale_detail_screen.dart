@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
+import 'rpg_draw_screen.dart';
+import '../services/api_service.dart';
 import '../widgets/story_image_view.dart';
 
 class FairyTaleDetailScreen extends StatefulWidget {
@@ -33,6 +35,157 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   void dispose() {
     _animController.dispose();
     super.dispose();
+  }
+
+  // 주인공 이름 입력 다이얼로그. 취소=null, 빈칸=주인공
+  Future<String?> _askPlayerName(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        String submit() {
+          final t = ctrl.text.trim();
+          return t.isEmpty ? '주인공' : t;
+        }
+
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('주인공 이름 짓기',
+              style: TextStyle(
+                  color: Color(0xFF3D2C8D), fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('동화 속 주인공이 될 이름이에요 ✨',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+              const SizedBox(height: 14),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLength: 10,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  hintText: '이름을 입력하세요',
+                  counterText: '',
+                  filled: true,
+                  fillColor: const Color(0xFFF3EFFA),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onSubmitted: (_) => Navigator.pop(ctx, submit()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7E57C2),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => Navigator.pop(ctx, submit()),
+              child: const Text('시작하기'),
+            ),
+          ],
+        );
+      },
+    );
+    ctrl.dispose();
+    return result;
+  }
+
+  // ===== RPG 시작: 이름 입력 → 제목으로 서버 동화 id 찾기 → RpgDrawScreen 이동 =====
+  Future<void> _startRpg(BuildContext context, FairyTale tale) async {
+    final playerName = await _askPlayerName(context);
+    if (playerName == null) return; // 취소
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF7E57C2)),
+      ),
+    );
+
+    try {
+      final stories = tale.isUserStory
+          ? await ApiService.getMyStories()
+          : await ApiService.getOriginalStories();
+
+      Map<String, dynamic>? match;
+      for (final s in stories) {
+        final m = s as Map<String, dynamic>;
+        final title = (m['title'] ?? '').toString().trim();
+        if (title == tale.title.trim()) {
+          match = m;
+          break;
+        }
+      }
+
+      if (mounted) Navigator.pop(context); // 로딩 닫기
+
+      if (match == null) {
+        _showNoMatchDialog(context, tale, stories);
+        return;
+      }
+
+      final storyId = (match['id'] as num).toInt();
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RpgDrawScreen(
+            storyId: storyId,
+            storyTitle: tale.title,
+            playerName: playerName,
+            assetHint: '', // TODO: 사용자가 그린 에셋 설명으로 교체
+            maxTurns: 6,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('RPG 시작 실패: $e')),
+      );
+    }
+  }
+
+  void _showNoMatchDialog(BuildContext context, FairyTale tale, List<dynamic> stories) {
+    final titles = stories
+        .map((s) => "• ${(s as Map)['title']}  (id: ${s['id']})")
+        .join('\n');
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('서버에서 동화를 못 찾았어요'),
+        content: SingleChildScrollView(
+          child: Text(
+            "'${tale.title}' 과(와) 같은 제목의 동화가 서버에 없습니다.\n\n"
+            "서버에 있는 동화:\n${titles.isEmpty ? '(없음 — 서버가 켜져 있는지 확인)' : titles}",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -170,6 +323,7 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
             child: Row(children: [_infoItem('카테고리', tale.category), _divider(), _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본')]),
           ),
           const SizedBox(height: 28),
+          // ===== 이 동화 읽기 =====
           SizedBox(
             width: double.infinity,
             child: GestureDetector(
@@ -188,6 +342,30 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
                     Icon(Icons.menu_book_rounded, color: Colors.white, size: 20),
                     SizedBox(width: 10),
                     Text('이 동화 읽기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // ===== RPG로 플레이 =====
+          SizedBox(
+            width: double.infinity,
+            child: GestureDetector(
+              onTap: () => _startRpg(context, tale),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF4A2E8C), Color(0xFF1A1145)]),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: const Color(0xFF4A2E8C).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.sports_esports_rounded, color: Colors.white, size: 20),
+                    SizedBox(width: 10),
+                    Text('RPG로 플레이', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                   ],
                 ),
               ),

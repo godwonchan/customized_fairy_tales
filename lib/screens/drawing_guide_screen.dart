@@ -4,7 +4,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
 import 'story_result_screen.dart';
+
+// ===== 공통 라벤더 팔레트 =====
+const _kBg = Color(0xFFF8F4FF);
+const _kPrimary = Color(0xFF7E57C2);
+const _kPrimaryLight = Color(0xFF9575CD);
+const _kPill = Color(0xFFEDE7F6);
+const _kInk = Color(0xFF3D2C8D);
+const _kSub = Color(0xFF8B82A8);
 
 class _DrawingPath {
   final Color color;
@@ -67,7 +76,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
   final List<_DrawingPath> _paths = [];
   _DrawingPath? _currentPath;
 
-  Color _selectedColor = Colors.black;
+  Color _selectedColor = const Color(0xFF3D2C8D);
   double _strokeWidth = 6.0;
   bool _isEraser = false;
 
@@ -80,7 +89,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
   late AnimationController _loadingController;
 
   final List<Color> _palette = [
-    Colors.black,
+    const Color(0xFF3D2C8D),
     const Color(0xFFE53935),
     const Color(0xFFFF8F00),
     const Color(0xFFFFD600),
@@ -115,7 +124,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
     });
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/stories/drawing-guide'),
+        Uri.parse('${ApiService.baseUrl}/stories/drawing-guide'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'character': widget.character,
@@ -185,10 +194,11 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('오류: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -205,24 +215,9 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _kBg,
       body: Stack(
         children: [
-          // ─── 배경: 딥퍼플-블루 밤하늘 ───
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1A0050),
-                  Color(0xFF2D1B69),
-                  Color(0xFF1A237E),
-                  Color(0xFF283593),
-                ],
-                stops: [0.0, 0.35, 0.65, 1.0],
-              ),
-            ),
-          ),
           // 장식 버블
           Positioned(
             top: -50,
@@ -232,7 +227,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
               height: 180,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF7C4DFF).withOpacity(0.1),
+                color: _kPrimaryLight.withOpacity(0.08),
               ),
             ),
           ),
@@ -244,33 +239,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
               height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF1565C0).withOpacity(0.12),
-              ),
-            ),
-          ),
-          // 반짝이 별 장식
-          Positioned(
-            top: 90,
-            right: 50,
-            child: AnimatedBuilder(
-              animation: _loadingController,
-              builder: (_, __) => Opacity(
-                opacity: (0.4 + 0.6 * (0.5 + 0.5 * _loadingController.value))
-                    .clamp(0.0, 1.0),
-                child: const Text('⭐', style: TextStyle(fontSize: 16)),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 170,
-            left: 30,
-            child: AnimatedBuilder(
-              animation: _loadingController,
-              builder: (_, __) => Opacity(
-                opacity:
-                    (0.3 + 0.7 * (0.5 + 0.5 * (1 - _loadingController.value)))
-                        .clamp(0.0, 1.0),
-                child: const Text('✨', style: TextStyle(fontSize: 14)),
+                color: const Color(0xFFEC407A).withOpacity(0.05),
               ),
             ),
           ),
@@ -311,14 +280,20 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: Colors.white.withOpacity(0.25)),
+                border: Border.all(color: _kPrimaryLight.withOpacity(0.3)),
+                boxShadow: [
+                  BoxShadow(
+                      color: _kPrimary.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3)),
+                ],
               ),
               child: const Icon(
                 Icons.arrow_back_ios_new_rounded,
                 size: 16,
-                color: Colors.white,
+                color: _kPrimary,
               ),
             ),
           ),
@@ -332,15 +307,12 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: _kInk,
                   ),
                 ),
                 Text(
                   '${widget.character} · ${widget.background}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.6),
-                  ),
+                  style: const TextStyle(fontSize: 11, color: _kSub),
                 ),
               ],
             ),
@@ -363,18 +335,11 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: active
-              ? const LinearGradient(
-                  colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)],
-                )
+              ? const LinearGradient(colors: [_kPrimaryLight, _kPrimary])
               : null,
-          color: active ? null : Colors.white.withOpacity(0.15),
+          color: active ? null : _kPill,
           boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFFFAB00).withOpacity(0.5),
-                    blurRadius: 8,
-                  ),
-                ]
+              ? [BoxShadow(color: _kPrimary.withOpacity(0.4), blurRadius: 8)]
               : null,
         ),
         child: Center(
@@ -383,9 +348,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: active
-                  ? const Color(0xFF4A148C)
-                  : Colors.white.withOpacity(0.5),
+              color: active ? Colors.white : _kSub,
             ),
           ),
         ),
@@ -396,9 +359,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w600,
-          color: active
-              ? const Color(0xFFFFD54F)
-              : Colors.white.withOpacity(0.4),
+          color: active ? _kPrimary : _kSub,
         ),
       ),
     ],
@@ -409,10 +370,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
     height: 2,
     margin: const EdgeInsets.only(bottom: 14),
     decoration: BoxDecoration(
-      gradient: active
-          ? const LinearGradient(colors: [Color(0xFFFFD54F), Color(0xFFFFAB00)])
-          : null,
-      color: active ? null : Colors.white.withOpacity(0.2),
+      color: active ? _kPrimary : _kPill,
       borderRadius: BorderRadius.circular(2),
     ),
   );
@@ -420,12 +378,11 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
   Widget _buildGuidePanel() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: _kPrimary.withOpacity(0.08),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
@@ -437,13 +394,9 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
           // 헤더
           Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF7E57C2), Color(0xFF512DA8)],
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
               children: [
@@ -480,8 +433,8 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             child: Wrap(
               spacing: 6,
               children: [
-                _tag(widget.character, const Color(0xFF9575CD)),
-                _tag(widget.background, const Color(0xFF64B5F6)),
+                _tag(widget.character, _kPrimary),
+                _tag(widget.background, const Color(0xFF5B8DEF)),
               ],
             ),
           ),
@@ -501,9 +454,9 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
   Widget _tag(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.2),
+      color: color.withOpacity(0.12),
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: color.withOpacity(0.5)),
+      border: Border.all(color: color.withOpacity(0.4)),
     ),
     child: Text(
       text,
@@ -517,17 +470,17 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         const CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD54F)),
+          valueColor: AlwaysStoppedAnimation<Color>(_kPrimary),
           strokeWidth: 3,
         ),
         const SizedBox(height: 16),
-        Text(
+        const Text(
           'AI가 그리기 가이드를\n만들고 있어요 ✨',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.white.withOpacity(0.8),
+            color: _kSub,
             height: 1.6,
           ),
         ),
@@ -545,11 +498,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
         Text(
           _guideError!,
           textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white.withOpacity(0.7),
-            height: 1.5,
-          ),
+          style: const TextStyle(fontSize: 12, color: _kSub, height: 1.5),
         ),
         const SizedBox(height: 16),
         GestureDetector(
@@ -557,13 +506,11 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFD54F), Color(0xFFFFAB00)],
-              ),
+              gradient: const LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFFAB00).withOpacity(0.4),
+                  color: _kPrimary.withOpacity(0.35),
                   blurRadius: 8,
                 ),
               ],
@@ -571,7 +518,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             child: const Text(
               '다시 시도',
               style: TextStyle(
-                color: Color(0xFF4A148C),
+                color: Colors.white,
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
@@ -591,17 +538,15 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF7E57C2).withOpacity(0.25),
+              color: _kBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: const Color(0xFF9575CD).withOpacity(0.4),
-              ),
+              border: Border.all(color: _kPrimaryLight.withOpacity(0.3)),
             ),
             child: Text(
               _guideText,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
-                color: Colors.white.withOpacity(0.9),
+                color: Color(0xFF4A4466),
                 height: 1.6,
               ),
             ),
@@ -613,7 +558,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w800,
-            color: Color(0xFFFFD54F),
+            color: _kPrimary,
           ),
         ),
         const SizedBox(height: 8),
@@ -629,12 +574,12 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                   height: 24,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)],
+                      colors: [_kPrimaryLight, _kPrimary],
                     ),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFFAB00).withOpacity(0.4),
+                        color: _kPrimary.withOpacity(0.3),
                         blurRadius: 6,
                       ),
                     ],
@@ -645,7 +590,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF4A148C),
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -654,9 +599,9 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                 Expanded(
                   child: Text(
                     _guideSteps[i],
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: Colors.white.withOpacity(0.85),
+                      color: Color(0xFF4A4466),
                       height: 1.55,
                     ),
                   ),
@@ -681,7 +626,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
+                  color: _kPrimary.withOpacity(0.10),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -733,9 +678,14 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+              color: _kPrimary.withOpacity(0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
       ),
       child: Row(
         children: [
@@ -755,14 +705,14 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFFFD54F)
-                        : Colors.white.withOpacity(0.3),
+                        ? _kPrimary
+                        : const Color(0xFFD9D0EC),
                     width: isSelected ? 2.5 : 1,
                   ),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: const Color(0xFFFFD54F).withOpacity(0.6),
+                            color: _kPrimary.withOpacity(0.4),
                             blurRadius: 6,
                           ),
                         ]
@@ -772,18 +722,18 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             );
           }),
           const SizedBox(width: 6),
-          Icon(
+          const Icon(
             Icons.line_weight_rounded,
             size: 16,
-            color: Colors.white.withOpacity(0.7),
+            color: _kSub,
           ),
           Expanded(
             child: SliderTheme(
               data: SliderThemeData(
-                activeTrackColor: const Color(0xFFFFD54F),
-                inactiveTrackColor: Colors.white.withOpacity(0.2),
-                thumbColor: const Color(0xFFFFD54F),
-                overlayColor: const Color(0xFFFFD54F).withOpacity(0.2),
+                activeTrackColor: _kPrimary,
+                inactiveTrackColor: _kPill,
+                thumbColor: _kPrimary,
+                overlayColor: _kPrimary.withOpacity(0.15),
               ),
               child: Slider(
                 value: _strokeWidth,
@@ -798,22 +748,13 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: _isEraser
-                    ? const Color(0xFFFFD54F)
-                    : Colors.white.withOpacity(0.12),
+                color: _isEraser ? _kPrimary : _kPill,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _isEraser
-                      ? Colors.transparent
-                      : Colors.white.withOpacity(0.2),
-                ),
               ),
               child: Icon(
                 Icons.auto_fix_normal_rounded,
                 size: 18,
-                color: _isEraser
-                    ? const Color(0xFF4A148C)
-                    : Colors.white.withOpacity(0.7),
+                color: _isEraser ? Colors.white : _kPrimary,
               ),
             ),
           ),
@@ -823,14 +764,13 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: _kPill,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.undo_rounded,
                 size: 18,
-                color: Colors.white.withOpacity(0.8),
+                color: _kPrimary,
               ),
             ),
           ),
@@ -840,16 +780,13 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFFE53935).withOpacity(0.25),
+                color: const Color(0xFFFDECEF),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: const Color(0xFFE53935).withOpacity(0.5),
-                ),
               ),
               child: const Icon(
                 Icons.delete_outline_rounded,
                 size: 18,
-                color: Color(0xFFEF9A9A),
+                color: Color(0xFFE5689B),
               ),
             ),
           ),
@@ -864,14 +801,14 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
       height: 54,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFFFE57F), Color(0xFFFFD740), Color(0xFFFFAB00)],
+          colors: [_kPrimaryLight, _kPrimary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFFD740).withOpacity(0.5),
+            color: _kPrimary.withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -886,7 +823,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                      color: Color(0xFF4A148C),
+                      color: Colors.white,
                       strokeWidth: 2.5,
                     ),
                   ),
@@ -896,7 +833,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF4A148C),
+                      color: Colors.white,
                     ),
                   ),
                 ],
@@ -906,7 +843,7 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                 children: [
                   Icon(
                     Icons.auto_stories_rounded,
-                    color: Color(0xFF4A148C),
+                    color: Colors.white,
                     size: 20,
                   ),
                   SizedBox(width: 8),
@@ -915,13 +852,13 @@ class _DrawingGuideScreenState extends State<DrawingGuideScreen>
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF4A148C),
+                      color: Colors.white,
                     ),
                   ),
                   SizedBox(width: 8),
                   Icon(
                     Icons.arrow_forward_rounded,
-                    color: Color(0xFF4A148C),
+                    color: Colors.white,
                     size: 18,
                   ),
                 ],

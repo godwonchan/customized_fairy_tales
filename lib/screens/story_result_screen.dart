@@ -1,6 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
+
+// ===== 공통 라벤더 팔레트 =====
+const _kBg = Color(0xFFF8F4FF);
+const _kPrimary = Color(0xFF7E57C2);
+const _kPrimaryLight = Color(0xFF9575CD);
+const _kPill = Color(0xFFEDE7F6);
+const _kInk = Color(0xFF3D2C8D);
+const _kSub = Color(0xFF8B82A8);
+const _kInk2 = Color(0xFF4A4466);
 
 class StoryResultScreen extends StatefulWidget {
   final String character;
@@ -26,14 +36,12 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   String _storyTitle = '';
   String _drawingDescription = '';
   List<String> _storyPages = [];
-  List<String?> _pageImages = []; // 페이지별 AI 이미지 base64
+  List<String?> _pageImages = [];
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnim;
   late AnimationController _pageController;
   late Animation<Offset> _pageSlide;
-  late AnimationController _starController;
-  late Animation<double> _starAnim;
 
   int _currentPage = 0;
 
@@ -47,10 +55,6 @@ class _StoryResultScreenState extends State<StoryResultScreen>
     _pageSlide = Tween<Offset>(begin: const Offset(0.05, 0), end: Offset.zero)
         .animate(CurvedAnimation(parent: _pageController, curve: Curves.easeOutCubic));
 
-    _starController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-    _starAnim = Tween<double>(begin: 0.4, end: 1.0)
-        .animate(CurvedAnimation(parent: _starController, curve: Curves.easeInOut));
-
     _generateStory();
   }
 
@@ -58,7 +62,6 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   void dispose() {
     _fadeController.dispose();
     _pageController.dispose();
-    _starController.dispose();
     super.dispose();
   }
 
@@ -66,7 +69,7 @@ class _StoryResultScreenState extends State<StoryResultScreen>
     setState(() { _isLoading = true; _error = null; });
     try {
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/stories/generate-from-drawing'),
+        Uri.parse('${ApiService.baseUrl}/stories/generate-from-drawing'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'character': widget.character,
@@ -104,7 +107,7 @@ class _StoryResultScreenState extends State<StoryResultScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('동화가 저장되었어요! 📚'),
-        backgroundColor: const Color(0xFF7E57C2),
+        backgroundColor: _kPrimary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -114,36 +117,17 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _kBg,
       body: Stack(
         children: [
-          // 배경
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1A0050), Color(0xFF2D1B69), Color(0xFF1A237E), Color(0xFF283593)],
-                stops: [0.0, 0.35, 0.65, 1.0],
-              ),
-            ),
-          ),
           Positioned(top: -50, right: -30,
             child: Container(width: 180, height: 180,
               decoration: BoxDecoration(shape: BoxShape.circle,
-                  color: const Color(0xFF7C4DFF).withOpacity(0.1)))),
+                  color: _kPrimaryLight.withOpacity(0.08)))),
           Positioned(bottom: 60, left: -40,
             child: Container(width: 150, height: 150,
               decoration: BoxDecoration(shape: BoxShape.circle,
-                  color: const Color(0xFF1565C0).withOpacity(0.12)))),
-          // 별 장식
-          Positioned(top: 90, right: 60,
-            child: AnimatedBuilder(animation: _starAnim,
-              builder: (_, __) => Opacity(opacity: _starAnim.value * 0.6,
-                child: const Text('⭐', style: TextStyle(fontSize: 16))))),
-          Positioned(top: 180, left: 40,
-            child: AnimatedBuilder(animation: _starAnim,
-              builder: (_, __) => Opacity(opacity: (1 - _starAnim.value) * 0.6 + 0.3,
-                child: const Text('✨', style: TextStyle(fontSize: 14))))),
+                  color: const Color(0xFFEC407A).withOpacity(0.05)))),
           SafeArea(
             child: Column(
               children: [
@@ -171,11 +155,14 @@ class _StoryResultScreenState extends State<StoryResultScreen>
             child: Container(
               width: 42, height: 42,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: Colors.white.withOpacity(0.25)),
+                border: Border.all(color: _kPrimaryLight.withOpacity(0.3)),
+                boxShadow: [
+                  BoxShadow(color: _kPrimary.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3)),
+                ],
               ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Colors.white),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: _kPrimary),
             ),
           ),
           const SizedBox(width: 14),
@@ -184,9 +171,9 @@ class _StoryResultScreenState extends State<StoryResultScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('나의 동화 완성!',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white)),
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _kInk)),
                 Text('AI가 내 그림으로 동화를 만들었어요 🎉',
-                    style: TextStyle(fontSize: 11, color: Colors.white60)),
+                    style: TextStyle(fontSize: 11, color: _kSub)),
               ],
             ),
           ),
@@ -202,15 +189,15 @@ class _StoryResultScreenState extends State<StoryResultScreen>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)]),
+                  gradient: const LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))],
+                  boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.bookmark_add_rounded, color: Color(0xFF4A148C), size: 16),
+                    Icon(Icons.bookmark_add_rounded, color: Colors.white, size: 16),
                     SizedBox(width: 4),
-                    Text('저장하기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF4A148C))),
+                    Text('저장하기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
                   ],
                 ),
               ),
@@ -226,24 +213,23 @@ class _StoryResultScreenState extends State<StoryResultScreen>
         width: 28, height: 28,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: active ? const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)]) : null,
-          color: active ? null : Colors.white.withOpacity(0.15),
-          boxShadow: active ? [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.5), blurRadius: 8)] : null,
+          gradient: active ? const LinearGradient(colors: [_kPrimaryLight, _kPrimary]) : null,
+          color: active ? null : _kPill,
+          boxShadow: active ? [BoxShadow(color: _kPrimary.withOpacity(0.4), blurRadius: 8)] : null,
         ),
         child: Center(child: Text('$num', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
-            color: active ? const Color(0xFF4A148C) : Colors.white.withOpacity(0.5)))),
+            color: active ? Colors.white : _kSub))),
       ),
       const SizedBox(height: 2),
       Text(label, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600,
-          color: active ? const Color(0xFFFFD54F) : Colors.white.withOpacity(0.4))),
+          color: active ? _kPrimary : _kSub)),
     ],
   );
 
   Widget _stepConnector(bool active) => Container(
     width: 20, height: 2, margin: const EdgeInsets.only(bottom: 14),
     decoration: BoxDecoration(
-      gradient: active ? const LinearGradient(colors: [Color(0xFFFFD54F), Color(0xFFFFAB00)]) : null,
-      color: active ? null : Colors.white.withOpacity(0.2),
+      color: active ? _kPrimary : _kPill,
       borderRadius: BorderRadius.circular(2),
     ),
   );
@@ -256,25 +242,25 @@ class _StoryResultScreenState extends State<StoryResultScreen>
           Container(
             width: 100, height: 100,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)]),
+              gradient: const LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8))],
+              boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.35), blurRadius: 24, offset: const Offset(0, 8))],
             ),
-            child: const Icon(Icons.auto_stories_rounded, color: Color(0xFF4A148C), size: 48),
+            child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 48),
           ),
           const SizedBox(height: 24),
           const Text('AI가 동화를 만들고 있어요!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _kInk)),
           const SizedBox(height: 10),
-          Text('내 그림을 분석하고\n5페이지 동화 + AI 삽화를 그리는 중이에요 ✨',
+          const Text('내 그림을 분석하고\n5페이지 동화 + AI 삽화를 그리는 중이에요 ✨',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7), height: 1.6)),
+              style: TextStyle(fontSize: 14, color: _kSub, height: 1.6)),
           const SizedBox(height: 6),
-          Text('(약 1~2분 소요될 수 있어요)',
-              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.45))),
+          const Text('(약 1~2분 소요될 수 있어요)',
+              style: TextStyle(fontSize: 12, color: Color(0xFFB6ABD6))),
           const SizedBox(height: 30),
           const CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD54F)),
+            valueColor: AlwaysStoppedAnimation<Color>(_kPrimary),
             strokeWidth: 3,
           ),
         ],
@@ -292,19 +278,19 @@ class _StoryResultScreenState extends State<StoryResultScreen>
             const Text('😢', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 16),
             Text(_error!, textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7), height: 1.6)),
+                style: const TextStyle(fontSize: 14, color: _kSub, height: 1.6)),
             const SizedBox(height: 24),
             GestureDetector(
               onTap: _generateStory,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)]),
+                  gradient: const LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
+                  boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 6))],
                 ),
                 child: const Text('다시 만들기',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF4A148C))),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
               ),
             ),
           ],
@@ -321,10 +307,8 @@ class _StoryResultScreenState extends State<StoryResultScreen>
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 왼쪽: 내가 그린 그림 + AI 해석
             SizedBox(width: 280, child: _buildDrawingPanel()),
             const SizedBox(width: 16),
-            // 오른쪽: 동화 내용 + AI 삽화
             Expanded(child: _buildStoryPanel()),
           ],
         ),
@@ -335,19 +319,18 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   Widget _buildDrawingPanel() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 14, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 4))],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF26A69A), Color(0xFF00796B)]),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [Color(0xFF4CAF82), Color(0xFF2E9E6B)]),
             ),
             child: const Row(
               children: [
@@ -370,7 +353,7 @@ class _StoryResultScreenState extends State<StoryResultScreen>
             ),
           ),
           if (_drawingDescription.isNotEmpty) ...[
-            Container(height: 1, color: Colors.white.withOpacity(0.15)),
+            Container(height: 1, color: _kPill),
             Expanded(
               flex: 1,
               child: Padding(
@@ -383,14 +366,14 @@ class _StoryResultScreenState extends State<StoryResultScreen>
                         Text('✨', style: TextStyle(fontSize: 13)),
                         SizedBox(width: 4),
                         Text('AI의 그림 해석',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFFFD54F))),
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kPrimary)),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Expanded(
                       child: SingleChildScrollView(
                         child: Text(_drawingDescription,
-                            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.85), height: 1.55)),
+                            style: const TextStyle(fontSize: 12, color: _kInk2, height: 1.55)),
                       ),
                     ),
                   ],
@@ -406,20 +389,19 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   Widget _buildStoryPanel() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 14, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 4))],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 동화 제목 헤더
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF7E57C2), Color(0xFF512DA8)]),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [_kPrimaryLight, _kPrimary]),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,16 +416,16 @@ class _StoryResultScreenState extends State<StoryResultScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFD54F).withOpacity(0.2),
+                        color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFFD54F).withOpacity(0.5)),
+                        border: Border.all(color: Colors.white.withOpacity(0.4)),
                       ),
                       child: const Row(
                         children: [
                           Text('⭐', style: TextStyle(fontSize: 11)),
                           SizedBox(width: 4),
                           Text('나만의 동화',
-                              style: TextStyle(fontSize: 11, color: Color(0xFFFFD54F), fontWeight: FontWeight.w700)),
+                              style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700)),
                         ],
                       ),
                     ),
@@ -464,22 +446,19 @@ class _StoryResultScreenState extends State<StoryResultScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ─── 동화 텍스트 ───
                     Text(
                       _storyPages.isNotEmpty ? _storyPages[_currentPage] : '',
-                      style: TextStyle(
-                          fontSize: 16, color: Colors.white.withOpacity(0.9),
+                      style: const TextStyle(
+                          fontSize: 16, color: _kInk2,
                           height: 1.9, letterSpacing: 0.3),
                     ),
                     const SizedBox(height: 20),
-                    // ─── AI 삽화 ───
                     _buildPageAiImage(),
                   ],
                 ),
               ),
             ),
           ),
-          // 페이지 네비게이션
           _buildPageNav(),
         ],
       ),
@@ -494,33 +473,27 @@ class _StoryResultScreenState extends State<StoryResultScreen>
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFD54F).withOpacity(0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+        border: Border.all(color: _kPrimaryLight.withOpacity(0.3), width: 1.5),
+        boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // AI 삽화 레이블
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [const Color(0xFFFFD54F).withOpacity(0.25), const Color(0xFFFFAB00).withOpacity(0.15)],
-                ),
-              ),
+              color: _kPill,
               child: const Row(
                 children: [
                   Text('🎨', style: TextStyle(fontSize: 14)),
                   SizedBox(width: 6),
                   Text('AI가 그린 삽화',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFFFFD54F))),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _kPrimary)),
                 ],
               ),
             ),
-            // 이미지
             if (hasImage)
               Image.memory(
                 base64Decode(_pageImages[_currentPage]!),
@@ -531,17 +504,17 @@ class _StoryResultScreenState extends State<StoryResultScreen>
               Container(
                 width: double.infinity,
                 height: 180,
-                color: Colors.white.withOpacity(0.05),
-                child: Column(
+                color: _kBg,
+                child: const Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD54F)),
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(_kPrimary),
                       strokeWidth: 2,
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10),
                     Text('AI 삽화 준비 중...',
-                        style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5))),
+                        style: TextStyle(fontSize: 12, color: _kSub)),
                   ],
                 ),
               ),
@@ -554,8 +527,8 @@ class _StoryResultScreenState extends State<StoryResultScreen>
   Widget _buildPageNav() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.15))),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _kPill)),
       ),
       child: Row(
         children: [
@@ -564,12 +537,11 @@ class _StoryResultScreenState extends State<StoryResultScreen>
             child: Container(
               width: 42, height: 42,
               decoration: BoxDecoration(
-                color: _currentPage > 0 ? Colors.white.withOpacity(0.15) : Colors.white.withOpacity(0.05),
+                color: _currentPage > 0 ? _kPill : const Color(0xFFF1ECFA),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
               ),
               child: Icon(Icons.arrow_back_ios_new_rounded, size: 16,
-                  color: _currentPage > 0 ? Colors.white : Colors.white.withOpacity(0.2)),
+                  color: _currentPage > 0 ? _kPrimary : const Color(0xFFC9BEE6)),
             ),
           ),
           const SizedBox(width: 12),
@@ -586,13 +558,10 @@ class _StoryResultScreenState extends State<StoryResultScreen>
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     decoration: BoxDecoration(
                       gradient: isActive
-                          ? const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)])
+                          ? const LinearGradient(colors: [_kPrimaryLight, _kPrimary])
                           : null,
-                      color: isActive ? null : Colors.white.withOpacity(0.2),
+                      color: isActive ? null : _kPill,
                       borderRadius: BorderRadius.circular(4),
-                      boxShadow: isActive
-                          ? [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.4), blurRadius: 6)]
-                          : null,
                     ),
                   ),
                 );
@@ -606,17 +575,17 @@ class _StoryResultScreenState extends State<StoryResultScreen>
               width: 42, height: 42,
               decoration: BoxDecoration(
                 gradient: _currentPage < _storyPages.length - 1
-                    ? const LinearGradient(colors: [Color(0xFFFFE57F), Color(0xFFFFAB00)])
+                    ? const LinearGradient(colors: [_kPrimaryLight, _kPrimary])
                     : null,
-                color: _currentPage < _storyPages.length - 1 ? null : Colors.white.withOpacity(0.05),
+                color: _currentPage < _storyPages.length - 1 ? null : const Color(0xFFF1ECFA),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: _currentPage < _storyPages.length - 1
-                    ? [BoxShadow(color: const Color(0xFFFFAB00).withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 3))]
+                    ? [BoxShadow(color: _kPrimary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))]
                     : null,
               ),
               child: Icon(Icons.arrow_forward_ios_rounded, size: 16,
                   color: _currentPage < _storyPages.length - 1
-                      ? const Color(0xFF4A148C) : Colors.white.withOpacity(0.2)),
+                      ? Colors.white : const Color(0xFFC9BEE6)),
             ),
           ),
         ],

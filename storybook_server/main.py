@@ -69,6 +69,21 @@ app = FastAPI(title="Storybook Server")
 from routers.story_creation import router as story_creation_router
 app.include_router(story_creation_router)
 
+from routers.rpg import router as rpg_router
+app.include_router(rpg_router)
+
+from routers.rpg_scene import router as rpg_scene_router
+app.include_router(rpg_scene_router)
+
+from routers.rpg_asset import router as rpg_asset_router
+app.include_router(rpg_asset_router)
+
+from routers.rpg_sprite import router as rpg_sprite_router
+app.include_router(rpg_sprite_router)
+
+from routers.rpg_final import router as rpg_final_router
+app.include_router(rpg_final_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1515,7 +1530,7 @@ def _run_apply_revision_job(
                 session.add(page)
 
                 image_url = (
-                    f"http://127.0.0.1:8000/stories/{story_id}/pages/{page_no}/image"
+                    f"http://192.168.219.110:8000/stories/{story_id}/pages/{page_no}/image"
                     f"?ts={int(datetime.utcnow().timestamp())}"
                 )
                 generated_image_paths.append(image_url)

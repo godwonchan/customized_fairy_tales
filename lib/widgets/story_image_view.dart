@@ -25,12 +25,12 @@ class StoryImageView extends StatelessWidget {
     // 안드로이드 실제 기기 & 에뮬레이터 모두 처리
     String resolved = imagePath;
 
-    // localhost → 192.168.219.110 (실제 기기용)
-    resolved = resolved.replaceFirst('http://localhost:', 'http://192.168.219.110:');
-    // 127.0.0.1 → 192.168.219.110
-    resolved = resolved.replaceFirst('http://127.0.0.1:', 'http://192.168.219.110:');
-    // 10.0.2.2 → 192.168.219.110
-    resolved = resolved.replaceFirst('http://10.0.2.2:', 'http://192.168.219.110:');
+    // localhost → localhost (실제 기기용)
+    resolved = resolved.replaceFirst('http://localhost:', 'http://localhost:');
+    // 127.0.0.1 → localhost
+    resolved = resolved.replaceFirst('http://127.0.0.1:', 'http://localhost:');
+    // 10.0.2.2 → localhost
+    resolved = resolved.replaceFirst('http://10.0.2.2:', 'http://localhost:');
 
     return resolved;
   }
