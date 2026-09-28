@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'profile_screen.dart';
+
 // ═══════════════════════════════════════════════════════════════
 //  설정 화면
 // ═══════════════════════════════════════════════════════════════
@@ -73,7 +75,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                   _buildSettingItem(
                     icon: Icons.person_outline,
                     label: '계정 관리',
-                    onTap: () => _showComingSoon(context),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      );
+                    },
                     isTablet: isTablet,
                   ),
                   _buildSettingItem(

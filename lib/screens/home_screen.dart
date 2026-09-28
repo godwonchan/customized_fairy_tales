@@ -3,6 +3,9 @@ import 'fairy_tale_list_screen.dart';
 import 'my_stories_screen.dart';
 import 'settings_screen.dart';
 
+import 'profile_screen.dart';
+import '../services/api_service.dart'; // [추가] 유저 정보 조회를 위해 추가!
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -140,6 +143,8 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<Offset> _slideAnim;
   final TextEditingController _searchController = TextEditingController();
 
+  String _nickname = '동화친구';
+
   final List<Map<String, dynamic>> _recentStories = [
     {'title': '잭과 콩나무', 'date': '2024.05.20', 'color': const Color(0xFF81C784), 'icon': Icons.eco_rounded},
     {'title': '인어공주', 'date': '2024.05.18', 'color': const Color(0xFF64B5F6), 'icon': Icons.waves_rounded},
@@ -149,11 +154,33 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _loadNickname(); // [추가] 닉네임 불러오기 실행
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
+  }
+
+  // [추가] 저장소에서 닉네임 가져오는 함수
+  Future<void> _loadNickname() async {
+    final info = await ApiService.getUserInfo();
+    if (!mounted) return;
+    setState(() {
+      _nickname = info['nickname'] ?? '동화친구';
+    });
+  }
+
+  // [추가] 프로필 화면 열기 및 변경 시 즉시 갱신
+  Future<void> _openProfile() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+    );
+    // 프로필 화면에서 닉네임을 변경하고 돌아오면(result == true) 즉시 다시 로드!
+    if (result == true) {
+      _loadNickname();
+    }
   }
 
   @override
@@ -270,32 +297,47 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
         const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))],
-          ),
-          child: Row(
-            children: [
-              Container(width: 36, height: 36,
-                decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFFE0B2), width: 1.5)),
-                child: const Icon(Icons.face_rounded, size: 22, color: Color(0xFFFF8F00))),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('안녕하세요!', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                  const Row(children: [
-                    Text('동화친구님', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF3D2C8D))),
-                    SizedBox(width: 4),
-                    Icon(Icons.star_rounded, size: 14, color: Color(0xFFFFB300)),
-                  ]),
-                ],
-              ),
-            ],
+        // [수정] GestureDetector로 감싸서 클릭 가능하게 변경
+        GestureDetector(
+          onTap: _openProfile,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4))],
+            ),
+            child: Row(
+              children: [
+                Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFE0B2), width: 1.5)
+                    ),
+                    child: const Icon(Icons.face_rounded, size: 22, color: Color(0xFFFF8F00))
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('안녕하세요!', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                    // [수정] const 제거 및 동적 닉네임 바인딩
+                    Row(
+                      children: [
+                        Text(
+                            '$_nickname님',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF3D2C8D))
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.star_rounded, size: 14, color: Color(0xFFFFB300)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],

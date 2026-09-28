@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Session, select
 
+from auth import router as auth_router # [추가]
+from tts_service import translate_korean_to_english, generate_speech_audio
+
 from app_core import (
     engine,
     Story,
@@ -71,6 +74,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router) # [추가]
 
 revision_jobs: Dict[str, Dict[str, Any]] = {}
 
@@ -1564,3 +1569,32 @@ def _run_apply_revision_job(
         revision_jobs[job_id]["error"] = str(e)
         revision_jobs[job_id]["current_page_number"] = None
         revision_jobs[job_id]["message"] = "이미지 생성 중 오류가 발생했습니다."
+
+# =========================
+# TTS & 번역 엔드포인트
+# =========================
+class StoryTranslateRequest(BaseModel):
+    text: str
+
+class StoryTTSRequest(BaseModel):
+    text: str
+    language: str = "ko"  # "ko" 또는 "en"
+
+@app.post("/stories/translate-en")
+def translate_story_endpoint(payload: StoryTranslateRequest):
+    translated_text = translate_korean_to_english(payload.text)
+    return {
+        "original_text": payload.text,
+        "translated_text": translated_text
+    }
+
+@app.post("/stories/tts")
+async def get_story_tts_endpoint(payload: StoryTTSRequest):
+    if not payload.text or not payload.text.strip():
+        raise HTTPException(status_code=400, detail="텍스트가 비어있습니다.")
+
+    try:
+        audio_bytes = await generate_speech_audio(payload.text, payload.language)
+        return Response(content=audio_bytes, media_type="audio/mpeg")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"음성 생성 실패: {e}")
