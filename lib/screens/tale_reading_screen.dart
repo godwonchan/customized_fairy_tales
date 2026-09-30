@@ -590,12 +590,14 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
       },
       itemBuilder: (context, index) {
         final page = _taleBook!.pages[index];
+        // 👇 현재 보고 있는 페이지인지 확인해서 넘겨줌
+        final isCurrent = index == _currentPageIndex;
         return Padding(padding: const EdgeInsets.all(16), child: _buildTabletPageContent(page));
       },
     );
   }
 
-  Widget _buildTabletPageContent(TalePage page) {
+  Widget _buildTabletPageContent(TalePage page, {bool isCurrentPage = false}) {
     return AnimatedBuilder(
       animation: _pageFlipAnim,
       builder: (context, child) => Opacity(opacity: 1.0 - (_pageFlipAnim.value * 0.3), child: child),
@@ -604,7 +606,8 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
         children: [
           Expanded(flex: 55, child: _buildImageArea(page, isTablet: true)),
           const SizedBox(width: 24),
-          Expanded(flex: 45, child: _buildTextAndAudioArea(page, isTablet: true)),
+          // 👇 isCurrentPage 전달
+          Expanded(flex: 45, child: _buildTextAndAudioArea(page, isTablet: true, isCurrentPage: isCurrentPage)),
         ],
       ),
     );
@@ -633,8 +636,99 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
             child: Column(children: [
               _buildImageArea(page, isTablet: false),
               const SizedBox(height: 16),
-              _buildTextAndAudioArea(page, isTablet: false),
+            // 💡 index == _currentPageIndex 직접 전달
+            _buildTextAndAudioArea(
+                page,
+                isTablet: false,
+                isCurrentPage: index == _currentPageIndex,
+              ),
             ]),
+          ),
+        );
+      },
+    );
+  }
+
+  // 🔍 3분할 만화 컷 및 일러스트 전체화면 확대 모달
+  void _showFullScreenImage(String imagePath) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.88),
+      builder: (dialogContext) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // 1. 핀치 줌 & 패닝 가능한 대형 이미지 뷰어
+              Center(
+                child: InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 4.0, // 최대 4배까지 부드럽게 확대 가능
+                  clipBehavior: Clip.none,
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(dialogContext).size.width * 0.92,
+                      maxHeight: MediaQuery.of(dialogContext).size.height * 0.88,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: StoryImageView(
+                        imagePath: imagePath,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // 2. 우측 상단 닫기(X) 버튼
+              Positioned(
+                top: 24,
+                right: 24,
+                child: SafeArea(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(dialogContext),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // 3. 하단 힌트 라벨
+              Positioned(
+                bottom: 24,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      '두 손가락으로 확대하거나 드래그할 수 있어요 ✨',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -643,40 +737,129 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
 
   Widget _buildImageArea(TalePage page, {required bool isTablet}) {
     return Stack(
+      alignment: Alignment.center,
       children: [
-        Container(
-          height: isTablet ? double.infinity : 300,
-          decoration: BoxDecoration(
-            color: widget.tale.cardColor,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.2), blurRadius: 24, offset: const Offset(0, 10)),
-              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 4)),
-            ],
+        // 1. 🌟 좌우 화살표의 정중앙에 배치된 동화 일러스트 카드
+        Center(
+          child: Container(
+            height: isTablet ? double.infinity : 300,
+            decoration: BoxDecoration(
+              color: widget.tale.cardColor,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF7E57C2).withOpacity(0.2),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: StoryImageView(
+                    imagePath: page.imagePath,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                // 💡 전체화면 버튼이 허공이 아니라 '그림 카드 오른쪽 위 모퉁이'에 쏙 들어가도록 배치
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => _showFullScreenImage(page.imagePath),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen,
+                        size: 20,
+                        color: Color(0xFF7E57C2),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: ClipRRect(borderRadius: BorderRadius.circular(20), child: StoryImageView(imagePath: page.imagePath, fit: BoxFit.cover)),
         ),
-        Positioned(top: 12, right: 12,
-          child: Container(width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.85), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.fullscreen, size: 20, color: Color(0xFF7E57C2)))),
-        Positioned(left: 8, top: 0, bottom: 0,
-          child: Center(child: GestureDetector(onTap: _goPrev,
-            child: Container(width: 40, height: 40,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.85), shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]),
-              child: Icon(Icons.chevron_left, color: _currentPageIndex > 0 ? const Color(0xFF7E57C2) : Colors.grey[300]))))),
-        Positioned(right: 8, top: 0, bottom: 0,
-          child: Center(child: GestureDetector(onTap: _goNext,
-            child: Container(width: 40, height: 40,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.85), shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8)]),
-              child: Icon(Icons.chevron_right, color: _taleBook != null && _currentPageIndex < _taleBook!.totalPages - 1 ? const Color(0xFF7E57C2) : Colors.grey[300]))))),
+
+        // 2. ◀ 좌측 이전 페이지 이동 화살표
+        Positioned(
+          left: 8,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: _goPrev,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.85),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
+                  ],
+                ),
+                child: Icon(
+                  Icons.chevron_left,
+                  color: _currentPageIndex > 0 ? const Color(0xFF7E57C2) : Colors.grey[300],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // 3. ▶ 우측 다음 페이지 이동 화살표
+        Positioned(
+          right: 8,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: _goNext,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.85),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
+                  ],
+                ),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: _taleBook != null && _currentPageIndex < _taleBook!.totalPages - 1
+                      ? const Color(0xFF7E57C2)
+                      : Colors.grey[300],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildTextAndAudioArea(TalePage page, {required bool isTablet}) {
+  Widget _buildTextAndAudioArea(TalePage page, {required bool isTablet, bool isCurrentPage = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -722,12 +905,13 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
         ],
 
         const SizedBox(height: 20),
-        _buildAudioPlayer(isTablet),
+        // 👇 isCurrentPage 전달
+        _buildAudioPlayer(isTablet, isCurrentPage: isCurrentPage),
       ],
     );
   }
 
-  Widget _buildAudioPlayer(bool isTablet) {
+  Widget _buildAudioPlayer(bool isTablet, {bool isCurrentPage = false}) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -824,7 +1008,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
 
               // [수정] 재생 버튼: 튜토리얼 key 유지 + 음성 생성 로딩 인디케이터 적용
               GestureDetector(
-                key: _audioPlayButtonKey, // 튜토리얼 타깃 키 유지!
+                key: isCurrentPage ? _audioPlayButtonKey : null,
                 onTap: _isAudioLoading ? null : _togglePlay,
                 child: Container(
                   width: 44, height: 44,
@@ -1108,32 +1292,36 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
       ),
     );
   }
-  // [병규 튜토리얼] 최초 1회 실행 체크 (force: true 시 도움말 버튼에서 강제 실행)
+  // [병규 튜토리얼] 최초 1회 실행 체크
   Future<void> _checkAndShowTutorial({bool force = false}) async {
     if (!mounted || _isLoading || _taleBook == null) return;
 
-    await Future.delayed(const Duration(milliseconds: 400)); // 화면 위젯 렌더링 완료 대기
+    await Future.delayed(const Duration(milliseconds: 600)); // 화면 위젯 렌더링 완료 대기
     if (!mounted) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final bool isTutorialSeen = prefs.getBool('is_reading_tutorial_seen') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool isTutorialSeen = prefs.getBool('is_reading_tutorial_seen') ?? false;
 
-    if (!isTutorialSeen || force) {
-      _initTutorialTargets();
-      _tutorialCoachMark = TutorialCoachMark(
-        targets: _targets,
-        colorShadow: const Color(0xFF2D3436),
-        textSkip: "건너뛰기",
-        paddingFocus: 8,
-        opacityShadow: 0.8,
-        onFinish: () async {
-          await prefs.setBool('is_reading_tutorial_seen', true);
-        },
-        onSkip: () {
-          prefs.setBool('is_reading_tutorial_seen', true);
-          return true;
-        },
-      )..show(context: context);
+      if (!isTutorialSeen || force) {
+        _initTutorialTargets();
+        _tutorialCoachMark = TutorialCoachMark(
+          targets: _targets,
+          colorShadow: const Color(0xFF2D3436),
+          textSkip: "건너뛰기",
+          paddingFocus: 8,
+          opacityShadow: 0.8,
+          onFinish: () async {
+            await prefs.setBool('is_reading_tutorial_seen', true);
+          },
+          onSkip: () {
+            prefs.setBool('is_reading_tutorial_seen', true);
+            return true;
+          },
+        )..show(context: context);
+      }
+    } catch (e) {
+      debugPrint('튜토리얼 실행 예외 무시: $e');
     }
   }
 

@@ -5,6 +5,7 @@ import 'settings_screen.dart';
 
 import 'profile_screen.dart';
 import '../services/api_service.dart'; // [추가] 유저 정보 조회를 위해 추가!
+import 'creation/custom_story_create_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -386,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen>
                   Text('상상력을 더해 세상에 하나뿐인\n동화를 만들어보세요!',
                       style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.75), height: 1.6)),
                   const SizedBox(height: 24),
-                  _FloatingButton(onTap: _navigateToTaleList),
+              _FloatingButton(onTap: _navigateToTaleList),
                 ],
               ),
             ),
@@ -424,7 +425,12 @@ class _HomeScreenState extends State<HomeScreen>
         'desc': '좋아하는 동화를\n모아보아요',
         'btnColor': const Color(0xFFFF8F00),
         'titleColor': const Color(0xFFE65100),
-        'onTap': () {},
+        'onTap': () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CustomStoryCreateScreen()),
+          );
+        },
       },
     ];
 

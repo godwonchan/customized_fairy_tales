@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import uuid
 import threading
+import os
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
@@ -9,8 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import SQLModel, Session, select
 
-from auth import router as auth_router # [추가]
+from auth import router as auth_router # [로그인]
 from tts_service import translate_korean_to_english, generate_speech_audio
+
+from routers.lumi_chat import router as lumi_chat_router # [lumi 대화]
+from routers.story_generation import router as story_generation_router # [스토리 생성]
+from routers.story_image import router as story_image_router # [이미지 생성]
+
+from fastapi.staticfiles import StaticFiles
+from routers.story_storage import router as story_storage_router # [보관함 라우터]
 
 from app_core import (
     engine,
@@ -75,7 +83,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router) # [추가]
+# static/stories 폴더 생성 및 웹 접근 URL(/static) 연결
+os.makedirs("static/stories", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.include_router(auth_router) # [로그인]
+app.include_router(lumi_chat_router) # [lumi 대화]
+app.include_router(story_generation_router) # [스토리 생성]
+app.include_router(story_image_router) # [이미지 생성]
+app.include_router(story_storage_router) # [보관함 라우터]
 
 revision_jobs: Dict[str, Dict[str, Any]] = {}
 
@@ -379,12 +395,30 @@ def get_story_page_image(story_id: int, page_number: int):
             .where(StoryPage.page_number == page_number)
         ).first()
 
-        if not page or not page.image_data:
+        # 만약 해당 페이지에 이미지가 없고 표지(0번) 요청이 실패한 경우 등을 대비한 폴백
+        img_data = None
+        mime_type = "image/png"
+        if page:
+            img_data = page.image_data or page.original_image_data
+            mime_type = page.image_mime_type or page.original_image_mime_type or "image/png"
+
+        # 1번 페이지 이미지가 없으면 0번(표지) 이미지라도 있는지 한 번 더 확인
+        if not img_data and page_number == 1:
+            cover_page = session.exec(
+                select(StoryPage)
+                .where(StoryPage.story_id == story_id)
+                .where(StoryPage.page_number == 0)
+            ).first()
+            if cover_page:
+                img_data = cover_page.image_data or cover_page.original_image_data
+                mime_type = cover_page.image_mime_type or "image/png"
+
+        if not img_data:
             raise HTTPException(status_code=404, detail="이미지가 없습니다.")
 
         return Response(
-            content=page.image_data,
-            media_type=page.image_mime_type or "application/octet-stream",
+            content=img_data,
+            media_type=mime_type,
         )
 
 

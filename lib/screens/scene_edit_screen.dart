@@ -142,7 +142,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     });
   }
 
-  Future<void> _checkAndShowTutorial() async {
+  Future<void> _checkAndShowTutorial({bool force = false}) async {
     // [추가] 화면 위젯 레이아웃이 100% 안정화될 때까지 300ms 대기
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
@@ -150,7 +150,8 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     final prefs = await SharedPreferences.getInstance();
     final bool isTutorialSeen = prefs.getBool('is_scene_tutorial_seen') ?? false;
 
-    if (true) {
+    // 💡 [수정] true 제거 -> 최초 1회만 노출되도록 조건식 복원
+    if (!isTutorialSeen || force) {
       _initTutorialTargets();
       _tutorialCoachMark = TutorialCoachMark(
         targets: _targets,

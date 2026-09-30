@@ -468,4 +468,18 @@ class ApiService {
     return response.bodyBytes;
   }
 
+  // 🗑️ 내가 만든 이야기 삭제 API
+  static Future<bool> deleteStory(int storyId) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$baseUrl/api/stories/$storyId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      return res.statusCode == 200 || res.statusCode == 204;
+    } catch (e) {
+      debugPrint('동화 삭제 통신 에러: $e');
+      return false;
+    }
+  }
+
 }

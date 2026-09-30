@@ -332,7 +332,7 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
     final prefs = await SharedPreferences.getInstance();
     final bool isTutorialSeen = prefs.getBool('is_home_tutorial_seen') ?? false;
 
-    if (true/*!isTutorialSeen || force*/) {
+    if (!isTutorialSeen || force) {
       _initTutorialTargets();
       _tutorialCoachMark = TutorialCoachMark(
         targets: _targets,

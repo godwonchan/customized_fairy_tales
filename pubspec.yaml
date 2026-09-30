@@ -18,6 +18,7 @@ dependencies:
   shared_preferences: ^2.2.2
   lottie: ^3.1.2
   audioplayers: ^6.8.1
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:
@@ -37,3 +38,4 @@ flutter:
     - assets/book_002_The_Little_Mermaid/
     - assets/book_003_Cinderella/
     - assets/animations/
+    - assets/images/

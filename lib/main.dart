@@ -6,6 +6,8 @@ import 'providers/favorites_provider.dart';
 
 import 'screens/login_screen.dart'; // import 추가
 
+import 'screens/creation/custom_story_create_screen.dart';
+
 void main() {
   runApp(
     ChangeNotifierProvider(

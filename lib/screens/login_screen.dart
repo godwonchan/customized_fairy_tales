@@ -180,6 +180,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: _usernameController,
                       hint: '아이디를 입력하세요',
                       icon: Icons.person_outline_rounded,
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) {
+                        // 아이디 입력 후 엔터 치면 비밀번호 창으로 포커스 이동
+                        FocusScope.of(context).nextFocus();
+                      },
                     ),
                     const SizedBox(height: 12),
                     _inputField(
@@ -187,6 +192,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       hint: '비밀번호를 입력하세요',
                       icon: Icons.lock_outline_rounded,
                       isPassword: true,
+                      // 회원가입 모드면 닉네임 창으로 가고, 일반 로그인이면 바로 완료(done)
+                      textInputAction: _isSignUp ? TextInputAction.next : TextInputAction.done,
+                      onSubmitted: (_) {
+                        if (_isSignUp) {
+                          FocusScope.of(context).nextFocus();
+                        } else {
+                          // 🚀 비밀번호에서 엔터 누르면 즉시 로그인 실행!
+                          if (!_isLoading) _submit();
+                        }
+                      },
                     ),
                     if (_isSignUp) ...[
                       const SizedBox(height: 12),
@@ -194,6 +209,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _nicknameController,
                         hint: '닉네임 (선택 사항)',
                         icon: Icons.face_rounded,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) {
+                          // 🚀 닉네임에서 엔터 누르면 즉시 가입 완료 실행!
+                          if (!_isLoading) _submit();
+                        },
                       ),
                     ],
                     const SizedBox(height: 24),
@@ -251,6 +271,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+                    // 👇 [여기 추가!] 3번: 관리자 빠른 로그인 버튼
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const AppShell()),
+                        );
+                      },
+                      icon: const Icon(Icons.bolt_rounded, size: 18, color: Color(0xFFB39DDB)),
+                      label: const Text(
+                        '⚡ 관리자 빠른 시작 (테스트용)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF9575CD),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -261,15 +300,21 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+
+
   Widget _inputField({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool isPassword = false,
+    TextInputAction? textInputAction,      // 👈 추가: 키보드 엔터 모양 (next / done)
+    void Function(String)? onSubmitted,    // 👈 추가: 엔터 쳤을 때 실행할 함수
   }) {
     return TextField(
       controller: controller,
       obscureText: isPassword,
+      textInputAction: textInputAction,      // 👈 연결
+      onSubmitted: onSubmitted,              // 👈 연결
       decoration: InputDecoration(
         prefixIcon: Icon(icon, color: const Color(0xFF7E57C2), size: 20),
         hintText: hint,
@@ -285,3 +330,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
