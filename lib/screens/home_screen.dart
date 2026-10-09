@@ -387,7 +387,25 @@ class _HomeScreenState extends State<HomeScreen>
                   Text('상상력을 더해 세상에 하나뿐인\n동화를 만들어보세요!',
                       style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.75), height: 1.6)),
                   const SizedBox(height: 24),
-              _FloatingButton(onTap: _navigateToTaleList),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _FloatingButton(
+                        onTap: _navigateToTaleList,
+                        label: '기존 동화 수정하기',
+                        icon: Icons.auto_fix_high_rounded,
+                        colors: const [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                      ),
+                      _FloatingButton(
+                        onTap: _navigateToStoryCreation,
+                        label: '나만의 동화 창작하기',
+                        icon: Icons.brush_rounded,
+                        colors: const [Color(0xFFF06292), Color(0xFFEC407A)],
+                        phaseShift: true,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -683,6 +701,18 @@ class _HomeScreenState extends State<HomeScreen>
     ));
   }
 
+  void _navigateToStoryCreation() {
+    Navigator.push(context, PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (_, animation, __) => const CustomStoryCreateScreen(),
+      transitionsBuilder: (_, animation, __, child) => SlideTransition(
+        position: Tween<Offset>(begin: const Offset(1.0, 0.0), end: Offset.zero)
+            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+    ));
+  }
+
   void _navigateToMyStories() {
     Navigator.push(context, PageRouteBuilder(
       transitionDuration: const Duration(milliseconds: 400),
@@ -699,7 +729,17 @@ class _HomeScreenState extends State<HomeScreen>
 // ─── 둥실둥실 애니메이션 버튼 ───
 class _FloatingButton extends StatefulWidget {
   final VoidCallback onTap;
-  const _FloatingButton({required this.onTap});
+  final String label;
+  final IconData icon;
+  final List<Color> colors;
+  final bool phaseShift;
+  const _FloatingButton({
+    required this.onTap,
+    required this.label,
+    required this.icon,
+    required this.colors,
+    this.phaseShift = false,
+  });
 
   @override
   State<_FloatingButton> createState() => _FloatingButtonState();
@@ -716,7 +756,9 @@ class _FloatingButtonState extends State<_FloatingButton>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
+    );
+    if (widget.phaseShift) _controller.value = 1.0;
+    _controller.repeat(reverse: true);
 
     _floatAnim = Tween<double>(begin: 0, end: -8).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
@@ -742,25 +784,23 @@ class _FloatingButtonState extends State<_FloatingButton>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
-            ),
+            gradient: LinearGradient(colors: widget.colors),
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF8F00).withOpacity(0.4),
+                color: widget.colors.last.withOpacity(0.4),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('이야기 만들기',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-              SizedBox(width: 8),
-              Icon(Icons.auto_fix_high_rounded, size: 16, color: Colors.white),
+              Text(widget.label,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+              const SizedBox(width: 8),
+              Icon(widget.icon, size: 16, color: Colors.white),
             ],
           ),
         ),
