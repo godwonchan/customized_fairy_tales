@@ -4,6 +4,7 @@ import 'tale_reading_screen.dart';
 import 'scene_edit_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/story_image_view.dart';
+import 'creation/custom_story_create_screen.dart';
 
 class PageSelectionScreen extends StatefulWidget {
   final FairyTale tale;
@@ -419,10 +420,76 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // 🌟 1. [신규 추가] 기존 동화 대본을 들고 새 창작 팔레트로 분기하는 버튼
+              GestureDetector(
+                onTap: () {
+                  final taleIdStr = widget.tale.id; // 👈 현재 동화의 고유 ID 추출
+
+                  // 기존 4화 대본 데이터를 CustomStoryCreateScreen 포맷에 맞게 패키징
+                  final initialStoryData = {
+                    'tale_id': taleIdStr, // 👈 대본 내부에도 동화 ID 보관
+                    'title': widget.tale.title,
+                    'pages': widget.taleBook.pages.map((p) => {
+                      'page_number': p.pageNumber,
+                      'content': p.text,
+                      'title': '${p.pageNumber}화',
+                      'characters': <String>[],
+                    }).toList(),
+                  };
+
+                  // 새로운 동화 창작 팔레트 화면으로 라우팅
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CustomStoryCreateScreen(
+                        initialStoryData: initialStoryData,
+                        taleId: taleIdStr, // 👈 [핵심] 해당 동화의 ID를 명시적으로 전달!
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF7E57C2), width: 1.8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7E57C2).withOpacity(0.12),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.auto_stories, size: 16, color: Color(0xFF7E57C2)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '이 그림들로 새로운 동화 만들기',
+                        style: TextStyle(
+                          fontSize: isTablet ? 13 : 12,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF7E57C2),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // 2. [기존 유지] 단일 특정 페이지 부분 수정 버튼
               GestureDetector(
                 onTap: _selectedPageIndex != null
                     ? () => Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => SceneEditScreen(tale: widget.tale, taleBook: widget.taleBook, selectedPageIndex: _selectedPageIndex!)))
+                    builder: (_) => SceneEditScreen(
+                      tale: widget.tale,
+                      taleBook: widget.taleBook,
+                      selectedPageIndex: _selectedPageIndex!,
+                    )))
                     : null,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
@@ -446,7 +513,9 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
                   ]),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
+
+              // 3. [기존 유지] 뒤로가기 버튼
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Row(children: const [

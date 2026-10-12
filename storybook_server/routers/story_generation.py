@@ -1,87 +1,129 @@
-# storybook_server/routers/story_generation.py
 import json
 import os
+import time  # 👈 [추가] 각 단계별 소요 시간 측정용
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
-from openai import AsyncOpenAI  # 👈 1. 진짜 비동기 클라이언트 사용!
-from pydantic import BaseModel
+from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+import traceback  # 👈 디버깅 트레이스백용 추가
+
+load_dotenv()
 
 router = APIRouter(prefix="/api/story", tags=["Story Generation"])
-# 비동기 클라이언트 인스턴스화
 client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ── 요청/응답 모델 정의 ──
-class StoryGenerateRequest(BaseModel):
-    mood: str
-    asset_descriptions: Dict[str, Dict[str, str]]
-    feedback: Optional[str] = None
-    previous_story: Optional[Dict[str, Any]] = None
+# 🎯 타깃 스토리 모델: gpt-5.5 바인딩
+STORY_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.5")
 
+
+# ── Pydantic 모델 정의 (프론트엔드 통신 규격 100% 호환 보존) ──
 class StoryPage(BaseModel):
     page: int
     title: str
     content: str
     layout_type: str = "single"
-    visual_scene_prompt: str
+    characters: List[str] = Field(default_factory=list)
+    visual_scene_prompt: str = ""
+
+class StoryGenerateRequest(BaseModel):
+    mood: Optional[str] = "자유로운 상상 모험"
+    asset_descriptions: Dict[str, Dict[str, str]]
+    story_notes: Optional[List[Dict[str, Any]]] = None  # 🎯 [추가!] 아이의 대화 메모 수신
+    feedback: Optional[str] = None
+    previous_story: Optional[Dict[str, Any]] = None
 
 class StoryGenerateResponse(BaseModel):
     title: str
     pages: List[StoryPage]
 
+
 @router.post("/generate", response_model=StoryGenerateResponse)
 async def generate_fairy_tale(req: StoryGenerateRequest):
-    """
-    아이의 그림 정보와 분위기를 바탕으로 GPT-4o-mini가 동화 줄거리를 빠르게 작성합니다.
-    """
-    # 1. 아이의 그림 에셋 정보 텍스트로 정리
     assets_summary = []
+    available_ids = list(req.asset_descriptions.keys())
+
+    # ID와 실제 한글 이름 매핑 (본문 안전 치환용)
+    id_to_name: Dict[str, str] = {}
+
     for cat_id, info in req.asset_descriptions.items():
         name = info.get("name", "").strip()
         desc = info.get("desc", "").strip()
         if name:
-            detail = f"- [{cat_id}] {name}"
+            id_to_name[cat_id] = name
+            detail = f"- [{cat_id}] 이름: '{name}'"
             if desc:
-                detail += f" ({desc})"
+                detail += f" (특징: {desc})"
             assets_summary.append(detail)
 
-    assets_text = "\n".join(assets_summary) if assets_summary else "- 주인공: 용감한 꼬마 영웅"
+    assets_text = "\n".join(assets_summary) if assets_summary else "- [hero] 이름: '용감한 친구'"
 
-    # 2. 시스템 프롬프트 (간결한 출력 토큰 유도 & JSON 일원화)
-    system_prompt = """
-너는 6~8세 아이들을 위한 따뜻하고 상상력이 넘치는 대한민국 최고의 동화 작가야.
-아이들이 그린 캐릭터와 도구들을 반드시 이야기의 핵심 요소로 등장시켜줘.
+    # 🎯 3. gpt-5.5 전용 고도화 시스템 프롬프트
+    # - 카테고리/템플릿 족쇄 완전 제거 (아이의 캐릭터 설정과 대화 중심 전개)
+    # - OpenAI gpt-image-2를 위한 일반화된 Action-Object Grounding 시각 프로토콜 주입
+    system_prompt = f"""
+너는 6~8세 아이들의 기발한 상상력을 세상에 단 하나뿐인 동화책으로 완성하는 대한민국 최고의 아동 문학 작가이자 아트 디렉터야.
+등록된 캐릭터/에셋 목록:
+{assets_text}
 
-[작성 규칙]
-1. 대상 연령: 만 5~8세 (쉬운 구어체, '~했어요', '~했답니다')
-2. 분량: 총 3~4개 페이지 (기승전결 구조, 페이지당 3~4문장)
-3. 외형 보존: 주인공이나 친구를 다른 생물로 변신시키지 말 것. 머리를 덮는 투구/가면 착용 금지.
-4. 연출 분기: 전체 페이지 중 딱 1개 페이지만 'three_panel'로 지정하고, 나머지는 'single'로 지정할 것.
-5. 시각 묘사(visual_scene_prompt): 이미지 생성을 위해 **영어 1~2문장(또는 3패널 동작 키워드)**으로 간결하게 작성할 것 (불필요한 미사여구 생략).
+[핵심 서사 원칙]
+1. 획일적인 모험 클리셰(단순 만남 -> 도구 탐색 -> 악당 마법 대결 -> 화해)나 고정된 카테고리 틀에 이야기를 억지로 맞추지 마세요.
+2. 아이가 부여한 캐릭터들의 독특한 이름, 특징, 행동 방식을 사건 전개의 최우선 인과관계로 삼아 자유롭고 창의적인 서사를 펼치세요.
+3. 캐릭터가 사물 형태이거나 눈코입이 없더라도 인위적으로 사람이나 전형적인 동물로 의인화하지 말고, 아이가 부여한 형태 그대로 자연스럽게 활약하도록 서술하세요.
+4. 대상 연령: 만 5~8세 (따뜻하고 리듬감 넘치는 구어체, '~했어요', '~했답니다')
+5. 분량: 총 3~4개 페이지 (자연스러운 기승전결, 페이지당 3~4문장)
+6. 본문(content) 규칙:
+   - 아이들이 직접 읽는 동화 본문이므로 영문 ID 토큰([hero] 등)을 절대 쓰지 마세요.
+   - 반드시 에셋 목록에 주어진 실제 한글 이름만 사용하여 읽기 쉽게 작성하세요.
+
+[장면별 활성 에셋(characters)]
+- 해당 장면에 등장하거나, 배경 무대가 되거나, 본문 이야기 속에서 언급·사용되는 모든 에셋 ID를 characters 배열에 빠짐없이 포함하세요.
+- 결말부 페이지에서는 모험을 함께 마무리하는 주요 인물 ID가 누락되지 않도록 모두 담으세요.
+
+[레이아웃 연출]
+- 전체 페이지 중 극적인 클라이맥스나 가장 다채로운 사건이 일어나는 딱 1페이지만 'three_panel'로 지정하고 나머지는 'single'로 지정하세요.
+
+[🎨 OpenAI gpt-image-2 시각 묘사(visual_scene_prompt) 엄격 프로토콜]
+1. 모든 페이지에 빠짐없이 visual_scene_prompt 키를 영문 1~2문장으로 작성하세요.
+2. 캐릭터 주체는 오직 등록된 에셋 ID 토큰([hero], [companion], [villain], [custom_...])으로만 표기하세요. (인간 명사 boy, girl, human 등 사용 엄격 금지)
+3. [ENTITY PRESENCE GROUNDING (에셋 본체 상시 출현 강제)]:
+- 본문에 등장한 행동, 능력, 도구 뒤로 캐릭터 본체가 가려지거나 사물로 치환되는 현상을 엄격히 금지합니다.
+- 특정 에셋이 마법, 도구, 구조물을 사용할 때 해당 결과물만 묘사하지 말고, 반드시 해당 에셋 토큰 본체가 화면에 직접 서 있거나 떠서 그 행동을 주도하는 모습을 문장에 명시하세요.
+4. [STORY PROPS VS CHILD ASSET LAYER SEPARATION (소품 분리 서술)]:
+- 아이가 등록한 에셋 토큰([hero], [companion], [item], [villain], [custom_...]) 외에, 동화 이야기 전개를 위해 본문에 추가된 사물이나 도구는 반드시 'ordinary background watercolor props without glowing outlines'로 규정하여 분리 서술하세요.
+5. [SCENE FOCUS & STAGING (장면당 집중도)]:
+- 한 장면에 모든 에셋을 무리하게 몰아넣지 마세요. 해당 장면의 이야기 사건을 주도하는 핵심 에셋 2~3개 위주로 시각적 포커스를 맞추어 visual_scene_prompt를 구성하세요.
+6. [배경과 전경의 분리]:
+   - 배경 요소(동굴의 보석, 숲의 버섯 등)와 인물이 사용하는 도구를 명확히 분리하여, gpt-image-2가 배경 물건을 인물의 무기나 행동 도구로 오인하지 않도록 서술하세요.
 
 [응답 JSON 규격]
 반드시 아래 JSON 구조로만 답하세요:
-{
+{{
   "title": "동화책 전체 제목",
   "pages": [
-    {
+    {{
       "page": 1,
       "title": "소제목",
-      "content": "동화 본문 내용",
+      "content": "동화 본문 내용 (반드시 실제 한글 이름 사용)",
       "layout_type": "single",
-      "visual_scene_prompt": "A boy and a lion walking on a sunny forest path holding a leaf umbrella."
-    },
-    {
-      "page": 2,
-      "title": "소제목",
-      "content": "동화 본문 내용",
-      "layout_type": "three_panel",
-      "visual_scene_prompt": "Panel 1: Finds a crystal. Panel 2: Waves the tool. Panel 3: Bright light shines."
-    }
+      "characters": ["hero", "companion"],
+      "visual_scene_prompt": "[hero] and [companion] walking together along a sunny grassy path toward a distant castle."
+    }}
   ]
-}
+}}
 """
 
-    # 3. 유저 프롬프트 (중복 가이드 제거)
+# 🎯 대화 메모(story_notes) 텍스트 정제
+    notes_summary = []
+    if req.story_notes:
+        for note in req.story_notes:
+            about = note.get("about", "이야기")
+            ans = note.get("answer", "").strip()
+            if ans:
+                notes_summary.append(f"- [{about}] 아이의 생각/사건: '{ans}'")
+    notes_text = "\n".join(notes_summary) if notes_summary else "- 자유롭고 즐거운 상상 모험"
+
     if req.feedback and req.previous_story:
         user_prompt = f"""
 [기존 이야기]
@@ -91,49 +133,117 @@ async def generate_fairy_tale(req: StoryGenerateRequest):
 [아이의 그림 에셋]
 {assets_text}
 
-[선택한 분위기]
-{req.mood}
+[아이와 나눈 대화 기록 (반영 필수)]
+{notes_text}
 
 [수정 요청]
 "{req.feedback}"
 
-위 요청을 반영하여 기존 이야기를 자연스럽게 각색해 줘.
+위 요청과 아이의 대화 기록을 반영하여 기존 이야기의 맥락을 살려 자연스럽게 각색해 줘. 본문에는 에셋 ID 대신 실제 한글 이름을 사용해 줘!
 """
     else:
         user_prompt = f"""
 [아이의 그림 에셋]
 {assets_text}
 
-[분위기]
-{req.mood}
+[아이와 나눈 대화 기록 (최우선 반영 필수)]
+{notes_text}
 
-위 에셋들을 주인공으로 3~4쪽짜리 동화를 작성해 줘.
+아이들이 등록한 캐릭터의 개성과 위 대화 기록의 사건/생각을 최우선 인과관계로 삼아 3~4쪽짜리 창의적인 동화를 작성해 줘. 본문에는 에셋 ID 대신 실제 한글 이름을 사용해 줘!
 """
 
     try:
-        # 🚀 2. 비동기 await 호출로 스레드 차단 방지 & 불필요한 토큰 낭비 제거
+        print("\n" + "═" * 60, flush=True)
+        print("🚀 [1/3] 줄거리 생성 요청 수신!", flush=True)
+        print(f"  - 등록된 캐릭터 에셋: {len(req.asset_descriptions)}개 ({list(id_to_name.values())})", flush=True)
+        print(f"  - 아이의 대화 메모 수: {len(req.story_notes or [])}개", flush=True)
+        print(f"🤖 [2/3] OpenAI {STORY_MODEL} 호출 시작 (최대 8,000 토큰 예산 할당)...", flush=True)
+
+        start_time = time.perf_counter()
+
+        # 🎯 gpt-5.5 호출: 8,000 토큰 버짓으로 추론 + 4컷 JSON 완전 출력 보장
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=STORY_MODEL,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7,
-            max_tokens=800,  # 💡 1200 -> 800으로 컴팩트하게 제한 (생성 속도 대폭 향상)
+            max_completion_tokens=8000,
         )
 
-        result_json = json.loads(response.choices[0].message.content)
+        elapsed = time.perf_counter() - start_time
+        choice = response.choices[0]
+        finish_reason = choice.finish_reason
+
+        # 📊 토큰 사용량 및 gpt-5.5 내부 추론(Reasoning) 토큰 정밀 분석
+        usage = response.usage
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        total_tokens = usage.total_tokens if usage else 0
+
+        reasoning_tokens = 0
+        if usage and hasattr(usage, "completion_tokens_details") and usage.completion_tokens_details:
+            reasoning_tokens = getattr(usage.completion_tokens_details, "reasoning_tokens", 0) or 0
+
+        print(f"⏱️ [완료 소요 시간]: {elapsed:.2f}초", flush=True)
+        print("📊 [토큰 텔레메트리]:", flush=True)
+        print(f"  - 프롬프트(입력) 토큰: {prompt_tokens:,} tokens", flush=True)
+        print(f"  - 모델 내부 추론 토큰: {reasoning_tokens:,} tokens (gpt-5.5의 생각 분량)", flush=True)
+        print(f"  - 최종 생성(출력) 토큰: {completion_tokens:,} tokens", flush=True)
+        print(f"  - 총합 사용 토큰:     {total_tokens:,} tokens", flush=True)
+
+        # 🚨 토큰 부족으로 인한 잘림 여부 즉시 판별
+        if finish_reason == "length":
+            print("🚨 [경고] finish_reason == 'length' : 토큰 한도 초과로 JSON이 중간에 잘렸습니다!", flush=True)
+        else:
+            print(f"✅ [생성 상태]: finish_reason == '{finish_reason}' (정상 완료)", flush=True)
+
+        print("✨ [3/3] OpenAI 응답 수신 완료! JSON 파싱 및 데이터 정제 시작...", flush=True)
+        result_json = json.loads(choice.message.content)
+
+        # 🛡️ 2중 안전망 100% 유지: 본문 토큰 자동 치환 및 범용 에셋 전역 복원
+        for page_data in result_json.get("pages", []):
+            # 1. 혹시 LLM이 본문(content)에 [hero] 등을 남겼다면 실제 한글 이름으로 치환
+            content_text = page_data.get("content", "")
+            for cat_id, name in id_to_name.items():
+                content_text = content_text.replace(f"[{cat_id}]", name)
+                content_text = content_text.replace(cat_id, name)
+            page_data["content"] = content_text
+
+            # 2. 범용 characters 복원 (단독 누락 방어 및 전역 에셋 검사)
+            chars = page_data.get("characters", [])
+            for cat_id, name in id_to_name.items():
+                if len(name) >= 2 and name in content_text and cat_id not in chars:
+                    chars.append(cat_id)
+
+            # fallback: 아무것도 잡히지 않았을 경우 기본 ID 보장
+            if not chars:
+                chars = [available_ids[0] if available_ids else "hero"]
+            page_data["characters"] = chars
+
+            # 3. visual_scene_prompt 누락 방어
+            prompt = page_data.get("visual_scene_prompt") or page_data.get("scene_prompt") or page_data.get("prompt")
+            if not prompt or not str(prompt).strip():
+                active_tokens = " and ".join(f"[{c}]" for c in chars)
+                page_data["visual_scene_prompt"] = f"{active_tokens} interacting together in a scenic setting."
+            else:
+                page_data["visual_scene_prompt"] = str(prompt).strip()
+
+            print(f"  📄 [{page_data.get('page')}화] 최종 바인딩 에셋: {page_data['characters']}")
+        print("🎉 [성공] 모든 페이지 정제 완료 -> 프론트엔드로 200 OK 응답 반환\n" + "═" * 60, flush=True)
         return StoryGenerateResponse(**result_json)
 
     except Exception as e:
         print(f"동화 줄거리 생성 에러: {e}")
-        hero_name = req.asset_descriptions.get("hero", {}).get("name", "꼬마 영웅")
+        traceback.print_exc()  # 👈 정확한 에러 위치와 원인 상세 출력
+        first_id = available_ids[0] if available_ids else "hero"
+        first_name = id_to_name.get(first_id, "주인공")
         return StoryGenerateResponse(
-            title=f"{hero_name}의 신나는 모험",
+            title="신나는 모험 이야기",
             pages=[
-                StoryPage(page=1, title="모험의 시작", content=f"{hero_name}(이)는 비밀의 숲으로 떠났어요.", layout_type="single", visual_scene_prompt="A cute doodle hero stepping into a magical glowing forest"),
-                StoryPage(page=2, title="신비한 마법", content="친구와 함께 힘을 합쳐 멋진 마법을 발견했답니다!", layout_type="three_panel", visual_scene_prompt="Panel 1: Finding an item. Panel 2: Using magic. Panel 3: Rainbow glow"),
-                StoryPage(page=3, title="행복한 결말", content="모두 함께 활짝 웃으며 모험을 마쳤어요!", layout_type="single", visual_scene_prompt="Joyful party under colorful sky with cute characters")
+                StoryPage(page=1, title="모험의 시작", content=f"{first_name}의 신나는 이야기가 시작되었어요.", layout_type="single", characters=[first_id], visual_scene_prompt=f"[{first_id}] setting off on a journey in a sunny forest."),
+                StoryPage(page=2, title="신비한 발견", content="길을 걷다 신기한 것을 발견했답니다!", layout_type="three_panel", characters=available_ids[:2], visual_scene_prompt=f"Top: [{first_id}] exploring. Bottom left: Finding a glowing stone. Bottom right: cheering."),
+                StoryPage(page=3, title="즐거운 마무리", content="모두 함께 웃으며 즐겁게 하루를 마쳤어요!", layout_type="single", characters=available_ids, visual_scene_prompt=f"[{first_id}] smiling together under the sunset.")
             ]
         )

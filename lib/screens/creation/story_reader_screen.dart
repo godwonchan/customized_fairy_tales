@@ -11,12 +11,14 @@ class StoryReaderScreen extends StatefulWidget {
   final String title;
   final List<Map<String, dynamic>> pages;
   final Map<String, Uint8List?> assetPngBytes;
+  final String? taleId; // 👈 [추가!] 동화 고유 식별자 (PK)
 
   const StoryReaderScreen({
     super.key,
     required this.title,
     required this.pages,
     required this.assetPngBytes,
+    this.taleId, // 👈 [추가!] 생성자에서 선택 인자로 수신
   });
 
   @override
@@ -140,6 +142,8 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       }
 
       final body = {
+        if (widget.taleId != null) 'id': widget.taleId,        // 👈 백엔드가 id 필드를 받을 때
+        if (widget.taleId != null) 'tale_id': widget.taleId,   // 👈 백엔드가 tale_id 필드를 받을 때
         'title': widget.title,
         'mood': '신나는 모험',
         'pages': pagesPayload,
@@ -276,31 +280,39 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
                                       // 🎨 [왼쪽 면]: 1:1 정사각 그림 영역 (잘림 0% 보장!)
                                       Expanded(
                                         flex: 11,
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            _buildBackgroundImage(page['imageUrl']),
-                                            // 페이지 뱃지
-                                            Positioned(
-                                              top: 18,
-                                              left: 18,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.65),
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  page['page'] ?? '',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.bold,
+                                        child: Container(
+                                          color: const Color(0xFFF9F7FC),
+                                          child: Center(
+                                            child: AspectRatio(
+                                              aspectRatio: 1.0, // 👈 1:1 정사각 캔버스 비율 고정
+                                              child: Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  _buildBackgroundImage(page['imageUrl']),
+                                                  // 페이지 뱃지
+                                                  Positioned(
+                                                    top: 18,
+                                                    left: 18,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withOpacity(0.65),
+                                                        borderRadius: BorderRadius.circular(20),
+                                                      ),
+                                                      child: Text(
+                                                        page['page'] ?? '',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 13,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
 
@@ -536,7 +548,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
         final bytes = base64Decode(base64String);
         return Image.memory(
           bytes,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
           alignment: Alignment.center,
           errorBuilder: (_, __, ___) => Container(color: const Color(0xFFEDE7F6)),
         );
@@ -547,7 +559,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
 
     return Image.network(
       imageUrl,
-      fit: BoxFit.cover,
+      fit: BoxFit.contain,
       alignment: Alignment.center,
       loadingBuilder: (ctx, child, progress) {
         if (progress == null) return child;

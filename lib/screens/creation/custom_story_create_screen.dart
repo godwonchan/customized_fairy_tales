@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
 import 'story_preview_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum CreationStage { choosing, drawing, askName, askDesc, askCustomWhat, askCustomRole, askStory, askEnding }
 
@@ -60,7 +61,15 @@ class StoryCategory {
 }
 
 class CustomStoryCreateScreen extends StatefulWidget {
-  const CustomStoryCreateScreen({super.key});
+  // 📖 보관함(수정모드)에서 넘겨받는 1~4화 줄거리 대본 캐시
+  final Map<String, dynamic>? initialStoryData;
+  final String? taleId; // 👈 [추가!] 보관함에서 넘어온 동화 고유 식별자
+
+  const CustomStoryCreateScreen({
+    super.key,
+    this.initialStoryData,
+    this.taleId, // 👈 [추가]
+  });
 
   @override
   State<CustomStoryCreateScreen> createState() => _CustomStoryCreateScreenState();
@@ -73,7 +82,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   static const Color _purple = Color(0xFF7C4DFF);
   static const Color _deep = Color(0xFF2B2A4C);
 
-  final List<StoryCategory> _allCategories = const [
+  final List<StoryCategory> _allCategories = [
     StoryCategory(id: 'hero', title: '주인공', fairyPrompt: '좋아! 우리 멋진 모험을 이끌어갈 주인공을 그려줘 ✨\n사람, 동물, 로봇… 뭐든지 괜찮아!', icon: Icons.person_pin, emoji: '🧒', color: Color(0xFF7E57C2), isRequired: true),
     StoryCategory(id: 'companion', title: '단짝 친구', fairyPrompt: '주인공 곁을 지켜줄 든든한 단짝 친구나 귀여운 동물 친구를 그려볼까?', icon: Icons.pets, emoji: '🐶', color: Color(0xFF26A69A)),
     StoryCategory(id: 'item', title: '마법 도구', fairyPrompt: '위험한 순간에 힘을 발휘할 신비한 마법 지팡이나 특별한 도구를 그려줘!', icon: Icons.auto_awesome, emoji: '🪄', color: Color(0xFFAB47BC)),
@@ -102,10 +111,22 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   List<String> _currentHints = [];
   final math.Random _random = math.Random();
 
+  // ── 갤러리 접기/펼치기 및 캔버스 화면 맞춤 ──
+  bool _isGalleryCollapsed = false; // 갤러리 접힘 상태 플래그
+  final TransformationController _transformCtrl = TransformationController();
+  bool _isPanMode = false;
+  final GlobalKey _workspaceKey = GlobalKey(); // 작업대 영역 크기 측정용 키
+  static const Size _virtualCanvasSize = Size(2000, 1600);
+  // ── 화면 맞춤 동적 도화지 크기 추적 ──
+  Size _currentCanvasSize = const Size(1200, 800); // 현재 화면 카드 크기 자동 보관
+
   final Map<String, List<DrawingPath>> _slotPaths = {};
   final Map<String, bool> _slotAiDelegated = {};
   final Map<String, Uint8List?> _slotPngBytes = {};
+  final Map<String, Uint8List?> _restoredBasePng = {}; // 👈 [추가!] 복원된 원본 밑그림 전용 보관소
   final Map<String, Map<String, String>> _slotDescriptions = {};
+
+  late String _activeTaleId; // 👈 [추가!] 현재 작업 중인 동화의 격리 네임스페이스 ID
 
   final List<DrawingPath> _paths = [];
   final List<DrawingPath> _redoStack = [];
@@ -163,8 +184,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   List<StoryCategory> get _remainingCategories =>
       _allCategories.where((c) => !_drawnOrder.contains(c.id)).toList();
 
-  bool get _heroDrawn =>
-      (_currentId == 'hero' && _paths.isNotEmpty) || (_currentId != 'hero' && (_slotPaths['hero']?.isNotEmpty ?? false));
+  bool get _heroDrawn {
+    final heroPaths = _currentId == 'hero' ? _paths : (_slotPaths['hero'] ?? []);
+    final hasPng = (_slotPngBytes['hero'] != null) || (_restoredBasePng['hero'] != null);
+    return heroPaths.isNotEmpty || hasPng;
+  }
 
   String _labelOf(String id) {
     final name = _slotDescriptions[id]?['name'];
@@ -174,6 +198,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
   Map<String, Map<String, String>> _descriptionsForServer() {
     final result = <String, Map<String, String>>{};
+
+    // 1. 이름 등록까지 마친 슬롯 처리
     _slotDescriptions.forEach((id, info) {
       final subject = _customSubject[id];
       if (subject == null) {
@@ -185,13 +211,47 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       if (desc.isNotEmpty) parts.add(desc);
       result[id] = {'name': info['name'] ?? subject, 'desc': parts.join(' / ')};
     });
-    _customSubject.forEach((id, subject) {
+
+    // 2. 🛡️ 방어 코드: 그림은 그렸는데 "다 그렸어!"를 깜빡한 슬롯도 기본 이름으로 자동 포함
+    for (final id in _drawnOrder) {
       final hasDrawing = (_slotPaths[id]?.isNotEmpty ?? false) || (_slotAiDelegated[id] ?? false);
-      if (hasDrawing) {
-        result.putIfAbsent(id, () => {'name': subject, 'desc': '$subject / 역할: ${_catById(id).title}'});
+      if (hasDrawing && !result.containsKey(id)) {
+        final cat = _catById(id);
+        final defaultName = _customSubject[id] ?? cat.title;
+        result[id] = {
+          'name': defaultName,
+          'desc': '$defaultName / 역할: ${cat.title}',
+        };
       }
-    });
+    }
+
     return result;
+  }
+
+// 🎯 [수정] 2000x1600 거대 도화지의 정중앙 영역을 화면에 빈틈없이 꽉 채우는 중앙 포커스 연산
+  void _fitCanvasToScreen() {
+    final RenderBox? box = _workspaceKey.currentContext?.findRenderObject() as RenderBox?;
+    final Size viewportSize = (box != null && box.hasSize) ? box.size : _currentCanvasSize;
+
+    if (viewportSize.width <= 0 || viewportSize.height <= 0) {
+      _transformCtrl.value = Matrix4.identity();
+      return;
+    }
+
+    // 도화지 중앙 1100x700 영역이 화면 틀을 100% 꽉 채우도록 지능형 줌인 배율 계산
+    final double focusScale = math.max(
+      viewportSize.width / 1200,
+      viewportSize.height / 800,
+    ).clamp(0.6, 1.5);
+
+    // 2000x1600 거대 도화지의 정중앙이 화면 중심에 오도록 오프셋 계산
+    final double dx = (viewportSize.width - (_virtualCanvasSize.width * focusScale)) / 2;
+    final double dy = (viewportSize.height - (_virtualCanvasSize.height * focusScale)) / 2;
+
+    setState(() {
+      _transformCtrl.value = Matrix4.translationValues(dx, dy, 0.0)
+        ..scale(focusScale, focusScale, 1.0);
+    });
   }
 
   void _startCustom() {
@@ -228,24 +288,85 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     _addLumi('좋아! ${cat.title} "$subject"을(를) 그려보자 🎨\n다 그리면 "다 그렸어!"를 눌러줘');
   }
 
+  Future<void> _receiveCustomRole(String roleText) async {
+    final subject = _pendingCustomName;
+    if (subject == null) return;
+
+    final trimmedRole = roleText.trim();
+    if (trimmedRole.isEmpty) return;
+
+    // 1. 고유한 커스텀 카테고리 ID 생성 (예: custom_1712345678)
+    final customId = 'custom_${DateTime.now().millisecondsSinceEpoch % 1000000}';
+
+    // 2. 아이가 입력한 역할을 이름으로 갖는 새로운 카테고리 객체 생성
+    final newCat = StoryCategory(
+      id: customId,
+      title: trimmedRole,
+      fairyPrompt: '좋아! $trimmedRole "$subject"을(를) 멋지게 그려보자 🎨',
+      icon: Icons.auto_awesome,
+      emoji: '✨',
+      color: const Color(0xFF7E57C2),
+    );
+
+    // 3. 카테고리 목록에 추가하고 바로 캔버스 열기
+    setState(() {
+      _allCategories.add(newCat);
+    });
+
+    await _assignCustom(customId);
+  }
+
   @override
   void initState() {
     super.initState();
+
+    // 1. 애니메이션 컨트롤러 초기화
     _fairyAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _sceneController = AnimationController(vsync: this, duration: const Duration(seconds: 60))..repeat();
+
+    _sceneController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 60),
+    )..repeat();
+
     _floatingAnim = Tween<double>(begin: -4.0, end: 4.0).animate(
       CurvedAnimation(parent: _fairyAnimController, curve: Curves.easeInOut),
     );
+
+    // 🎯 [핵심] 동화 ID 및 진입 경로 판별
+    if (widget.taleId != null || widget.initialStoryData != null) {
+      // 1. 보관함에서 진입한 경우: 해당 동화의 ID를 활성화하고 그 동화 그림만 복원
+      _activeTaleId = widget.taleId ?? widget.initialStoryData?['tale_id'] ?? 'default_tale';
+      _cachedStoryData = widget.initialStoryData;
+      _loadPersistedSlotPngs(_activeTaleId); // 👈 해당 동화의 그림들만 로드!
+    } else {
+      // 2. 메인 화면에서 [나만의 동화 창작하기]로 진입한 경우:
+      // 신규 고유 ID 생성 후, 이전 동화의 그림은 단 하나도 로드하지 않고 100% 빈 도화지로 시작!
+      _activeTaleId = 'tale_${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    // 도화지 시점 중앙 정렬 및 상황별 요정 루미 인사말
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _addLumi('안녕? 나는 이야기 요정 루미야 ✨\n우리 같이 동화를 만들어보자~\n먼저 뭐부터 그릴래?');
+      _centerCanvasView();
+      if (!mounted) return;
+
+      // 보관함에서 줄거리를 들고 온 경우 환영 멘트 분기
+      if (widget.initialStoryData != null) {
+        _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐 ✨');
+      } else {
+        _addLumi('안녕? 나는 이야기 요정 루미야 ✨\n우리 같이 동화를 만들어보자~\n먼저 뭐부터 그릴래?');
+      }
     });
   }
 
+  // 기존 center 함수도 fit 함수로 일치시켜 오프셋 튕김 방지
+  void _centerCanvasView() => _fitCanvasToScreen();
+
   @override
   void dispose() {
+    _transformCtrl.dispose();
     _speech.stop();
     _audioPlayer.dispose();
     _fairyAnimController.dispose();
@@ -385,6 +506,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       case CreationStage.askCustomWhat:
         _receiveCustomWhat(text);
         break;
+      // 👈 [추가!] 직접 타이핑한 역할 처리 분기
+      case CreationStage.askCustomRole:
+        _receiveCustomRole(text);
       case CreationStage.askStory:
       case CreationStage.askEnding:
         _answerStory(text);
@@ -423,16 +547,276 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     }
   }
 
+  // ── 💾 SharedPreferences 키 정규화 및 영구 저장 ──
+
+  // 접두사 'tale_' 중복을 방지하는 정규화 헬퍼
+  String _cleanTaleId(String id) => id.replaceFirst(RegExp(r'^tale_'), '');
+
+  // 슬롯별 PNG 이미지를 해당 동화 서랍에 영구 저장
+  Future<void> _persistSlotPng(String slotId, Uint8List? pngBytes) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cleanId = _cleanTaleId(_activeTaleId);
+    final key = 'tale_${cleanId}_sketch_png_$slotId';
+
+    if (pngBytes == null) {
+      await prefs.remove(key);
+      await prefs.remove('tale_tale_${cleanId}_sketch_png_$slotId'); // 구형 중복 키도 청소
+    } else {
+      await prefs.setString(key, base64Encode(pngBytes));
+    }
+  }
+
+  // 슬롯 메타데이터를 해당 동화 서랍에 영구 저장
+  Future<void> _persistAllMetadata() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cleanId = _cleanTaleId(_activeTaleId);
+
+    await prefs.setString('tale_${cleanId}_drawn_order', jsonEncode(_drawnOrder));
+    await prefs.setString('tale_${cleanId}_slot_descriptions', jsonEncode(_slotDescriptions));
+    await prefs.setString('tale_${cleanId}_custom_subjects', jsonEncode(_customSubject));
+
+    final customCats = _allCategories.where((c) => c.id.startsWith('custom_')).map((c) => {
+      'id': c.id,
+      'title': c.title,
+      'fairyPrompt': c.fairyPrompt,
+      'emoji': c.emoji,
+      'color': c.color.value,
+    }).toList();
+    await prefs.setString('tale_${cleanId}_custom_categories', jsonEncode(customCats));
+  }
+
+// 🎯 스마트 4단계 키 매칭을 통한 그림 및 메타데이터 100% 복원
+  Future<void> _loadPersistedSlotPngs(String targetTaleId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cleanTarget = _cleanTaleId(targetTaleId);
+
+    debugPrint('\n🔍 [에셋 복원 파이프라인 가동] 대상 Tale ID: "$targetTaleId" (정규화 ID: "$cleanTarget")');
+
+    // ── 1. 커스텀 카테고리 복원 ──
+    String? customCatsJson = prefs.getString('tale_${cleanTarget}_custom_categories') ??
+        prefs.getString('tale_tale_${cleanTarget}_custom_categories');
+    if (customCatsJson != null && customCatsJson.isNotEmpty) {
+      final List customCats = jsonDecode(customCatsJson);
+      for (final raw in customCats) {
+        final String id = raw['id'];
+        if (!_allCategories.any((c) => c.id == id)) {
+          _allCategories.add(StoryCategory(
+            id: id,
+            title: raw['title'] ?? '친구',
+            fairyPrompt: raw['fairyPrompt'] ?? '',
+            icon: Icons.auto_awesome,
+            emoji: raw['emoji'] ?? '✨',
+            color: Color(raw['color'] ?? 0xFF7E57C2),
+          ));
+        }
+      }
+    }
+
+    // ── 2. 슬롯 이름 및 커스텀 주제 복원 ──
+    String? descJson = prefs.getString('tale_${cleanTarget}_slot_descriptions') ??
+        prefs.getString('tale_tale_${cleanTarget}_slot_descriptions');
+    if (descJson != null && descJson.isNotEmpty) {
+      final Map<String, dynamic> rawDesc = jsonDecode(descJson);
+      rawDesc.forEach((k, v) => _slotDescriptions[k] = Map<String, String>.from(v));
+    }
+
+    String? subjectJson = prefs.getString('tale_${cleanTarget}_custom_subjects') ??
+        prefs.getString('tale_tale_${cleanTarget}_custom_subjects');
+    if (subjectJson != null && subjectJson.isNotEmpty) {
+      final Map<String, dynamic> rawSub = jsonDecode(subjectJson);
+      rawSub.forEach((k, v) => _customSubject[k] = v.toString());
+    }
+
+    // ── 3. 슬롯 순서 복원 ──
+    String? orderJson = prefs.getString('tale_${cleanTarget}_drawn_order') ??
+        prefs.getString('tale_tale_${cleanTarget}_drawn_order');
+    final List<String> loadedOrder = [];
+    if (orderJson != null && orderJson.isNotEmpty) {
+      loadedOrder.addAll(List<String>.from(jsonDecode(orderJson)));
+    }
+
+    // ── 4. 스마트 PNG 그림 키 검색 (4단계 안전망) ──
+    final allKeys = prefs.getKeys().toList();
+    final matchingKeys = <String>[];
+
+    // 1차: 정상 정규화 키 탐색 (tale_{cleanTarget}_sketch_png_)
+    final p1 = 'tale_${cleanTarget}_sketch_png_';
+    matchingKeys.addAll(allKeys.where((k) => k.startsWith(p1)));
+
+    // 2차: 구형 이중 접두사 키 탐색 (tale_tale_{cleanTarget}_sketch_png_)
+    if (matchingKeys.isEmpty) {
+      final p2 = 'tale_tale_${cleanTarget}_sketch_png_';
+      matchingKeys.addAll(allKeys.where((k) => k.startsWith(p2)));
+    }
+
+    // 3차: ID 부분 일치 탐색 (ID가 포함된 모든 sketch_png 키)
+    if (matchingKeys.isEmpty) {
+      matchingKeys.addAll(allKeys.where((k) => k.contains(cleanTarget) && k.contains('_sketch_png_')));
+    }
+
+    // 4차: 최후의 폴백 (저장소에 존재하는 가장 최근 sketch_png 그룹 탐색)
+    if (matchingKeys.isEmpty) {
+      debugPrint('⚠️ [1~3차 탐색 실패] 대상 ID로 키를 찾지 못함. 전체 저장소 폴백 탐색 시도...');
+      final allPngKeys = allKeys.where((k) => k.contains('_sketch_png_')).toList();
+      debugPrint('   -> 저장소 내 전체 그림 키 목록: $allPngKeys');
+      matchingKeys.addAll(allPngKeys);
+    }
+
+    debugPrint('📦 [발견된 그림 키 수]: ${matchingKeys.length}개 -> $matchingKeys');
+
+    // ── 5. PNG 데이터 디코딩 및 메모리 바인딩 ──
+    for (final key in matchingKeys) {
+      final slotId = key.split('_sketch_png_').last;
+      final base64Str = prefs.getString(key);
+      if (base64Str != null && base64Str.isNotEmpty) {
+        try {
+          final bytes = base64Decode(base64Str);
+          _slotPngBytes[slotId] = bytes;
+          _restoredBasePng[slotId] = bytes; // 👈 캔버스 밑그림 레이어에 직접 바인딩!
+          if (!loadedOrder.contains(slotId)) loadedOrder.add(slotId);
+        } catch (e) {
+          debugPrint('⚠️ Base64 디코딩 실패 ($key): $e');
+        }
+      }
+    }
+
+    // ── 6. 화면 UI 상태 즉시 활성화 ──
+    if (loadedOrder.isNotEmpty && mounted) {
+      setState(() {
+        _drawnOrder
+          ..clear()
+          ..addAll(loadedOrder);
+
+        // 첫 번째 에셋(짱구)을 기본 선택하고 그리기 모드로 전환
+        _currentId = _drawnOrder.first;
+        _paths.clear();
+        _stage = CreationStage.drawing;
+      });
+
+      debugPrint('🎉 [복원 완료] 총 ${_drawnOrder.length}개 에셋 복원 성공! (현재 슬롯: $_currentId)');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fitCanvasToScreen();
+      });
+    } else {
+      debugPrint('❌ [복원 실패] 복원할 수 있는 그림 데이터가 없습니다.');
+    }
+  }
+
+// 🎯 [OpenAI gpt-image-2 & gpt-4o-mini 연동] 512x512 정규화 캡처 및 선 굵기 보정
   Future<Uint8List?> _captureCanvasToPng() async {
-    if (_paths.isEmpty) return null;
+    final Uint8List? basePng = _currentId != null ? _restoredBasePng[_currentId] : null;
+    final bool hasBasePng = basePng != null;
+
+    // 그은 선도 없고 밑그림도 없으면 null
+    if (_paths.isEmpty && !hasBasePng) return null;
+    // 🎯 [중복 방지] 새로 그린 선이 전혀 없다면 재귀 크롭을 하지 않고 기존 이미지 원본 그대로 반환!
+    if (_paths.isEmpty && hasBasePng) return basePng;
+
     try {
-      final boundary = _canvasKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return null;
-      final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      // 1. 실제 그림이 존재하는 바운딩 박스 추적
+      double minX = double.infinity, minY = double.infinity;
+      double maxX = double.negativeInfinity, maxY = double.negativeInfinity;
+
+      for (final p in _paths) {
+        if (p.isEraser) continue;
+        for (final pt in p.points) {
+          if (pt.dx < minX) minX = pt.dx;
+          if (pt.dy < minY) minY = pt.dy;
+          if (pt.dx > maxX) maxX = pt.dx;
+          if (pt.dy > maxY) maxY = pt.dy;
+        }
+      }
+
+      // 현재 화면 크기에 따른 정중앙 밑그림 오프셋
+      const double centerLeft = (2000.0 - 512.0) / 2.0; // 744.0
+      const double centerTop = (1600.0 - 512.0) / 2.0;  // 544.0
+
+      if (hasBasePng) {
+        minX = math.min(minX, centerLeft);
+        minY = math.min(minY, centerTop);
+        maxX = math.max(maxX, centerLeft + 512.0);
+        maxY = math.max(maxY, centerTop + 512.0);
+      }
+
+      if (minX.isInfinite || minY.isInfinite) {
+        if (hasBasePng) {
+          minX = centerLeft;
+          minY = centerTop;
+          maxX = centerLeft + 512.0;
+          maxY = centerTop + 512.0;
+        } else {
+          return null;
+        }
+      }
+
+      // 2. 여백 28px 추가 및 정사각형 크롭 영역 산출
+      const double padding = 28.0;
+      minX = math.max(0.0, minX - padding);
+      minY = math.max(0.0, minY - padding);
+      // 🎯 [수정] 2000x1600 도화지 전역에서 선이 잘리지 않도록 virtualCanvasSize 기준으로 제한
+      maxX = math.min(_virtualCanvasSize.width, maxX + padding);
+      maxY = math.min(_virtualCanvasSize.height, maxY + padding);
+
+      final double width = (maxX - minX).clamp(10.0, _virtualCanvasSize.width);
+      final double height = (maxY - minY).clamp(10.0, _virtualCanvasSize.height);
+      final double boxSize = math.max(width, height);
+      final double cx = (minX + maxX) / 2.0;
+      final double cy = (minY + maxY) / 2.0;
+      final Rect cropRect = Rect.fromCenter(center: Offset(cx, cy), width: boxSize, height: boxSize);
+
+      // 3. 512x512 오프스크린 캔버스 렌더링
+      const double exportSize = 512.0;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, exportSize, exportSize));
+
+      canvas.saveLayer(const Rect.fromLTWH(0, 0, exportSize, exportSize), Paint());
+
+      final double scale = exportSize / boxSize;
+      canvas.scale(scale, scale);
+      canvas.translate(-cropRect.left, -cropRect.top);
+
+      // 🖼️ 이전 PNG 밑그림 레이어 병합
+      if (hasBasePng) {
+        final codec = await ui.instantiateImageCodec(basePng);
+        final frame = await codec.getNextFrame();
+        canvas.drawImage(frame.image, const Offset(centerLeft, centerTop), Paint());
+      }
+
+      // ✏️ 신규 선화 렌더링 + 최소 2.5px 선 굵기 보정
+      for (final p in _paths) {
+        if (p.points.isEmpty) continue;
+
+        final double effectiveWidth = p.isEraser
+            ? p.strokeWidth
+            : math.max(p.strokeWidth, 2.5 / scale);
+
+        final paint = Paint()
+          ..color = p.isEraser ? const Color(0x00000000) : p.color
+          ..strokeWidth = effectiveWidth
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..style = PaintingStyle.stroke
+          ..blendMode = p.isEraser ? BlendMode.clear : BlendMode.srcOver;
+
+        if (p.points.length == 1) {
+          canvas.drawPoints(ui.PointMode.points, [p.points.first], paint);
+        } else {
+          final drawPath = Path()..moveTo(p.points.first.dx, p.points.first.dy);
+          for (int i = 1; i < p.points.length; i++) {
+            drawPath.lineTo(p.points[i].dx, p.points[i].dy);
+          }
+          canvas.drawPath(drawPath, paint);
+        }
+      }
+
+      canvas.restore();
+
+      final picture = recorder.endRecording();
+      final ui.Image img = await picture.toImage(exportSize.toInt(), exportSize.toInt());
+      final ByteData? byteData = await img.toByteData(format: ui.ImageByteFormat.png);
       return byteData?.buffer.asUint8List();
-    } catch (e) {
-      debugPrint('PNG 캡처 에러: $e');
+    } catch (e, stack) {
+      debugPrint('⚠️ [OpenAI gpt-image-2 파이프라인] PNG 캡처 실패: $e\n$stack');
       return null;
     }
   }
@@ -440,13 +824,27 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   Future<void> _saveCurrentSlot() async {
     final id = _currentId;
     if (id == null) return;
+
+    // 🎯 1. 화면에 있는 벡터 선화 목록을 슬롯에 100% 온전히 보존 (절대 지우지 않음!)
     _slotPaths[id] = List.from(_paths);
-    if (_paths.isNotEmpty) {
+
+    // 🎯 2. 아이가 그린 선이나 밑그림이 있을 때 백엔드 전달용 PNG 바이트 생성
+    if (_paths.isNotEmpty || _restoredBasePng[id] != null) {
       _slotAiDelegated[id] = false;
-      _slotPngBytes[id] = await _captureCanvasToPng();
-    } else if (!(_slotAiDelegated[id] ?? false)) {
-      _slotPngBytes[id] = null;
+      final newPng = await _captureCanvasToPng();
+      if (newPng != null) {
+        _slotPngBytes[id] = newPng;
+        // ⚠️ [핵심] 신규 창작 중에는 _restoredBasePng에 덮어쓰지 않고,
+        // _paths와 _slotPaths도 비우지 않음! (획 단위 편집 보존)
+        await _persistSlotPng(id, newPng);
+      }
+    } else {
+      if (_slotPngBytes[id] != null) {
+        await _persistSlotPng(id, _slotPngBytes[id]);
+      }
     }
+
+    await _persistAllMetadata();
   }
 
   Future<void> _selectCategory(String id, {bool fromChip = true, bool announce = true}) async {
@@ -466,6 +864,12 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       _stage = CreationStage.drawing;
       if (!revisit) _drawnOrder.add(id);
     });
+
+    // 🎯 [추가] 슬롯 이동 직후 도화지 시점을 100% 꽉 찬 중앙 포커스로 자동 복구!
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitCanvasToScreen();
+    });
+
     if (fromChip) _addChild(revisit ? '${_labelOf(id)} 고칠래!' : '${cat.title} 그릴래!');
     if (!announce) return;
     if (revisit) {
@@ -480,6 +884,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     await _saveCurrentSlot();
     if (!mounted) return;
     setState(() => _stage = CreationStage.choosing);
+    // 🎯 [추가] 키보드가 닫히고 choosing 모드로 갈 때 캔버스 시점 자동 맞춤
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitCanvasToScreen();
+    });
+
     if (childSays != null) _addChild(childSays);
     final message = _remainingCategories.isEmpty
         ? '와! 준비한 걸 전부 다 그렸어 🎉\n이제 우리 동화를 만들어볼까?'
@@ -494,13 +903,20 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     if (id == null) return;
     _addChild('${_labelOf(id)} 계속 그릴래!');
     setState(() => _stage = CreationStage.drawing);
+
+    // 🎯 [추가] 그리기 재개 시에도 뷰포트 중앙 맞춤
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitCanvasToScreen();
+    });
+
     _addLumi('좋아, 이어서 그려보자! 🎨');
   }
 
   void _startNaming() {
     final cat = currentCat;
     if (cat == null || _isLumiThinking) return;
-    if (_paths.isEmpty) {
+    final hasDrawing = _paths.isNotEmpty || (_restoredBasePng[cat.id] != null) || (_slotPngBytes[cat.id] != null);
+    if (!hasDrawing) {
       _addLumi('아직 아무것도 안 그렸어! 먼저 ${cat.title}을(를) 그려줘 🎨');
       return;
     }
@@ -792,9 +1208,94 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       _redoStack.clear();
       _slotPaths[id] = [];
       _slotPngBytes[id] = null;
+      _restoredBasePng[id] = null; // 👈 [이 줄 추가!]
       _slotAiDelegated[id] = false;
       _slotDescriptions.remove(id);
     });
+  }
+
+  // 🗑️ 카테고리 슬롯 완전 삭제 함수
+  Future<void> _deleteCategorySlot(String id) async {
+    final cat = _catById(id);
+
+    // 1. 필수 카테고리(주인공)는 삭제 방지
+    if (cat.isRequired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('동화의 대장인 주인공은 삭제할 수 없어! 🧒'),
+          backgroundColor: Color(0xFFE53935),
+        ),
+      );
+      return;
+    }
+
+    // 2. 실수 방지 확인 다이얼로그
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Color(0xFFFF5252), size: 26),
+            SizedBox(width: 8),
+            Text('그림 지우기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deep)),
+          ],
+        ),
+        content: Text(
+          '\'${_labelOf(id)}\' 그림을 정말 지울까?\n지우면 처음부터 다시 그려야 해! 😢',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF4A4458), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('남겨둘래', style: TextStyle(color: _sub, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+            child: const Text('지우기', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    // 3. 상태 데이터에서 완전 삭제
+    setState(() {
+      _drawnOrder.remove(id);
+      _slotPaths.remove(id);
+      _slotPngBytes.remove(id);
+      _slotAiDelegated.remove(id);
+      _slotDescriptions.remove(id);
+      _customSubject.remove(id);
+      _storyNotes.remove(id);
+
+      // '내가 정할래'로 추가된 동적 커스텀 슬롯이면 전체 카테고리 목록에서도 제거
+      if (id.startsWith('custom_')) {
+        _allCategories.removeWhere((c) => c.id == id);
+      }
+
+      // 만약 현재 열려있던 슬롯을 지웠다면 선택 해제 및 choosing 단계로 복귀
+      if (_currentId == id) {
+        _currentId = null;
+        _paths.clear();
+        _redoStack.clear();
+        _stage = CreationStage.choosing;
+      }
+    });
+
+    // 🎯 [추가] 로컬 디스크에서도 삭제 동기화
+    await _persistSlotPng(id, null);
+    await _persistAllMetadata();
+
+    _addLumi('\'${cat.title}\' 그림을 지웠어! 다른 걸 골라보자 ✨');
   }
 
   Future<void> _proceedToStoryReview() async {
@@ -802,7 +1303,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     await _saveCurrentSlot();
     if (!mounted) return;
 
-    if (!(_slotPaths['hero']?.isNotEmpty ?? false)) {
+    final bool hasHero = (_slotPaths['hero']?.isNotEmpty ?? false) ||
+        (_slotPngBytes['hero'] != null) ||
+        (_restoredBasePng['hero'] != null);
+
+    if (!hasHero) {
       const warnText = '이야기의 대장이 될 주인공은 꼭 직접 그려줘야 해! 🎨';
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(warnText), backgroundColor: Color(0xFFE53935)),
@@ -897,7 +1402,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           assetPngBytes: _slotPngBytes,
           aiDelegated: _slotAiDelegated,
           assetDescriptions: _descriptionsForServer(),
+          storyNotes: _storyNotesForServer(), // 🎯 [추가!] 아이와 루미의 대화 기록 전달!
           cachedStoryData: _cachedStoryData,
+          taleId: _activeTaleId, // 👈 [추가!] 동화 고유 식별자 전달
         ),
       ),
     );
@@ -1444,8 +1951,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             ),
         ];
       case CreationStage.drawing:
+        final hasDrawing = _paths.isNotEmpty || (cat != null && (_restoredBasePng[cat.id] != null || _slotPngBytes[cat.id] != null));
         return [
-          QuickReply(label: '다 그렸어!', emoji: '✅', color: _green, primary: true, onTap: _paths.isNotEmpty ? _startNaming : null),
+          QuickReply(label: '다 그렸어!', emoji: '✅', color: _green, primary: true, onTap: hasDrawing ? _startNaming : null),
           QuickReply(label: '어떤 색이 어울릴까?', emoji: '🎨', color: const Color(0xFFFF6FB5), onTap: () => _sendQuestionToLumi('어떤 색이 어울릴까?')),
           QuickReply(
             label: '그리기 너무 어려워!',
@@ -1658,30 +2166,37 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   Widget _buildGallery() {
     final total = _allCategories.length;
     final count = _drawnOrder.length;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 14, 14),
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      padding: EdgeInsets.fromLTRB(16, 10, 14, _isGalleryCollapsed ? 10 : 14),
       decoration: _card(radius: 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── 상단 요약 바 (진행도 + 메모 + 접기/펼치기 토글) ──
           Row(
             children: [
               const Text('🖼️', style: TextStyle(fontSize: 18)),
               const SizedBox(width: 6),
-              const Text('내 그림 모음', style: TextStyle(fontSize: 18, color: _ink)),
-              const SizedBox(width: 12),
+              const Text('내 그림 모음', style: TextStyle(fontSize: 17, color: _ink)),
+              const SizedBox(width: 10),
               Expanded(
                 child: Container(
-                  height: 16,
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(color: const Color(0xFFF1EEF8), borderRadius: BorderRadius.circular(10)),
+                  height: 14,
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1EEF8),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: LayoutBuilder(
                     builder: (context, c) => Align(
                       alignment: Alignment.centerLeft,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 500),
                         curve: Curves.easeOutBack,
-                        width: count == 0 ? 0 : c.maxWidth * count / total,
+                        width: count == 0 ? 0 : (c.maxWidth * (count / total)),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(colors: [Color(0xFFFFD93D), Color(0xFFFF9F1C)]),
                           borderRadius: BorderRadius.circular(8),
@@ -1691,45 +2206,78 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              const Text('⭐', style: TextStyle(fontSize: 16)),
-              const SizedBox(width: 4),
-              Text('$count / $total', style: const TextStyle(fontSize: 15, color: Color(0xFFE08A00))),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              Text('$count / $total', style: const TextStyle(fontSize: 14, color: Color(0xFFE08A00), fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
               _buildStoryNotesChip(),
+              const SizedBox(width: 6),
+
+              // 🔼 [신규 추가] 갤러리 접기/펼치기 토글 버튼
+              _Pressable(
+                onTap: () {
+                  setState(() => _isGalleryCollapsed = !_isGalleryCollapsed);
+                  // 갤러리가 접히거나 펼쳐진 직후 캔버스 뷰포트 크기에 맞춰 도화지 자동 재배치
+                  WidgetsBinding.instance.addPostFrameCallback((_) => _fitCanvasToScreen());
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1EEF8),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isGalleryCollapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                        size: 18,
+                        color: _purple,
+                      ),
+                      Text(
+                        _isGalleryCollapsed ? '펼치기' : '접기',
+                        style: const TextStyle(fontSize: 12, color: _purple, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 96,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _drawnOrder.isEmpty
-                      ? Container(
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFBEA),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFFFE7A3), width: 2),
-                          ),
-                          child: const Text('그린 그림이 여기에 모여요 ✨\n눌러서 언제든 다시 고칠 수 있어!',
-                              textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Color(0xFFB88A1E), height: 1.5)),
-                        )
-                      : ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.only(bottom: 5),
-                          itemCount: _drawnOrder.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 10),
-                          itemBuilder: (context, index) =>
-                              _AppearIn(key: ValueKey('slot_${_drawnOrder[index]}'), child: _buildSlotItem(_drawnOrder[index])),
-                        ),
-                ),
-                const SizedBox(width: 10),
-                _buildAddSlotButton(),
-              ],
+
+          // ── 슬롯 목록 (접혔을 때는 완전히 숨겨져 캔버스 공간 확보) ──
+          if (!_isGalleryCollapsed) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 96,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _drawnOrder.isEmpty
+                        ? Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEA),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFFE7A3), width: 2),
+                      ),
+                      child: const Text('그린 그림이 여기에 모여요 ✨\n눌러서 언제든 다시 고칠 수 있어!',
+                          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFFB88A1E), height: 1.4)),
+                    )
+                        : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(bottom: 5),
+                      itemCount: _drawnOrder.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) =>
+                          _AppearIn(key: ValueKey('slot_${_drawnOrder[index]}'), child: _buildSlotItem(_drawnOrder[index])),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildAddSlotButton(),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1884,7 +2432,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     final isSelected = _currentId == id;
     final isAi = _slotAiDelegated[id] ?? false;
     final paths = isSelected ? _paths : (_slotPaths[id] ?? []);
-    final hasDrawing = paths.isNotEmpty;
+    final pngBytes = _slotPngBytes[id]; // 👈 [추가] 복원된 PNG 바이트 참조
+    final hasDrawing = paths.isNotEmpty || pngBytes != null; // 👈 [수정] 바이트 존재 여부 포함
     final named = _slotDescriptions[id]?['name']?.isNotEmpty == true;
 
     return _Pressable(
@@ -1920,9 +2469,16 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                       borderRadius: BorderRadius.circular(14),
                       child: isAi
                           ? const Center(child: Text('🪄', style: TextStyle(fontSize: 26)))
-                          : hasDrawing
+                          // 🎯 [수정] 선 좌표가 있으면 Painter로, 선 좌표가 없고 복원된 PNG가 있으면 Image.memory로 표시
+                          : paths.isNotEmpty
                               ? Container(color: Colors.white, child: CustomPaint(painter: MiniThumbnailPainter(paths), size: Size.infinite))
-                              : Center(child: Text(cat.emoji, style: const TextStyle(fontSize: 26))),
+                              : pngBytes != null
+                                  ? Container(
+                                      color: Colors.white,
+                                      padding: const EdgeInsets.all(4),
+                                      child: Image.memory(pngBytes, fit: BoxFit.contain),
+                                    )
+                                  : Center(child: Text(cat.emoji, style: const TextStyle(fontSize: 26))),
                     ),
                   ),
                   if (named || isAi)
@@ -1937,6 +2493,32 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                           border: Border.all(color: Colors.white, width: 2.5),
                         ),
                         child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  // 🗑️ [추가!] 슬롯 삭제 버튼 (좌측 상단 - 주인공 제외)
+                  if (!cat.isRequired)
+                    Positioned(
+                      top: -6,
+                      left: -6,
+                      child: GestureDetector(
+                        onTap: () => _deleteCategorySlot(id),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF5252),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.close_rounded, size: 13, color: Colors.white),
+                        ),
                       ),
                     ),
                 ],
@@ -1993,150 +2575,242 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     final isAi = cat != null && (_slotAiDelegated[cat.id] ?? false);
 
     return Container(
+      key: _workspaceKey, // 👈 [추가 1] 화면 크기 자동 측정을 위해 키 연결
       decoration: _card(),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: cat == null
             ? _buildCanvasPlaceholder()
-            : Stack(
-                children: [
-                  const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
-                  RepaintBoundary(
-                    key: _canvasKey,
-                    child: GestureDetector(
-                      onPanStart: (details) {
-                        setState(() {
-                          if (isAi) _slotAiDelegated[cat.id] = false;
-                          if (_stage == CreationStage.choosing) _stage = CreationStage.drawing;
-                          _redoStack.clear();
-                          _currentPath = DrawingPath(
-                            color: _selectedColor,
-                            strokeWidth: _currentStrokeWidth,
-                            isEraser: _isEraser,
-                            points: [details.localPosition],
-                          );
-                          _paths.add(_currentPath!);
-                        });
-                      },
-                      onPanUpdate: (details) {
-                        setState(() => _currentPath?.points.add(details.localPosition));
-                      },
-                      onPanEnd: (_) => _currentPath = null,
-                      child: CustomPaint(
-                        painter: TransparentDrawingPainter(_paths),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                  if (isAi)
-                    IgnorePointer(
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
-                          decoration: _chunky(color: Colors.white, edge: _cardEdge, radius: 26, depth: 5, border: _cardLine),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('🪄', style: TextStyle(fontSize: 44)),
-                              const SizedBox(height: 10),
-                              Text('루미가 ${cat.title}을(를) 대신 그려줄 거야!', style: const TextStyle(fontSize: 18, color: _ink)),
-                              const SizedBox(height: 4),
-                              const Text('직접 그리고 싶다면 바로 그려 봐 🎨', style: TextStyle(fontSize: 14, color: _sub)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (_paths.isEmpty)
-                    IgnorePointer(
-                      child: Center(
-                        child: AnimatedBuilder(
-                          animation: _floatingAnim,
-                          builder: (context, child) => Transform.translate(offset: Offset(0, _floatingAnim.value), child: child),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 104,
-                                height: 104,
-                                alignment: Alignment.center,
-                                decoration: _chunky(color: _tint(cat.color, 0.85), edge: _tint(cat.color, 0.6), shape: BoxShape.circle, depth: 5),
-                                child: Text(cat.emoji, style: const TextStyle(fontSize: 50)),
-                              ),
-                              const SizedBox(height: 16),
-                              Text('${_customSubject[cat.id] ?? cat.title}을(를) 자유롭게 그려봐!', style: TextStyle(fontSize: 22, color: _darken(cat.color, 0.05))),
-                              const SizedBox(height: 4),
-                              const Text('손가락이나 펜으로 쓱쓱 ✏️', style: TextStyle(fontSize: 15, color: _sub)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    top: 14,
-                    left: 14,
+            : LayoutBuilder(
+          builder: (context, constraints) {
+            // 🎯 현재 기기 화면의 카드 크기를 100% 그대로 도화지 크기로 동기화
+            final canvasWidth = constraints.maxWidth;
+            final canvasHeight = constraints.maxHeight;
+            _currentCanvasSize = Size(canvasWidth, canvasHeight);
+            final bool hasCanvasDrawing = _paths.isNotEmpty ||
+                (_currentId != null && (_restoredBasePng[_currentId] != null || _slotPngBytes[_currentId] != null));
+
+            return Stack(
+              children: [
+                // ── 🌐 작업대(Desk) & 100% 꽉 찬 인터랙티브 도화지 ──
+                Container(
+                  color: const Color(0xFFEDEAF6), // 줌아웃 시 드러나는 작업대 배경색
+                  child: InteractiveViewer(
+                    transformationController: _transformCtrl,
+                    constrained: false, // 👈 [추가 2] 화면 크기로 강제 압축되는 현상 차단!
+                    panEnabled: _isPanMode,
+                    scaleEnabled: _isPanMode,
+                    minScale: 0.2, // 줌아웃 시 도화지 전체 조망 가능
+                    maxScale: 3.5, // 줌인 시 세밀한 묘사 가능
+                    boundaryMargin: const EdgeInsets.all(500),
                     child: Container(
-                      padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
-                      decoration: _chunky(color: cat.color, radius: 20, depth: 4),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(cat.emoji, style: const TextStyle(fontSize: 16)),
-                          const SizedBox(width: 6),
-                          Text(_labelOf(cat.id), style: TextStyle(fontSize: 16, color: _onColor(cat.color))),
-                          if (cat.isRequired) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
-                              child: Text('필수', style: TextStyle(fontSize: 12, color: _onColor(cat.color))),
+                      width: _virtualCanvasSize.width,  // 👈 [수정 3] 진짜 2000 적용!
+                      height: _virtualCanvasSize.height, // 👈 [수정 3] 진짜 1600 적용!
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        // 🎯 [경계선] 도화지 가장자리에 둘러진 뚜렷한 보라색 외곽선 & 입체 그림자
+                        border: Border.all(color: const Color(0xFF7E57C2), width: 3.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2E1A47).withOpacity(0.16),
+                            blurRadius: 24,
+                            spreadRadius: 3,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          children: [
+                            // 1. 도화지 배경 도트 그리드 (화면 끝까지 꽉 참!)
+                            const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+
+                            // 2. 🖼️ 로컬에 영구 보존된 원본 밑그림 레이어 (정중앙 512x512)
+                            if (_currentId != null && _restoredBasePng[_currentId] != null)
+                              Positioned.fill(
+                                child: Center(
+                                  child: Image.memory(
+                                    _restoredBasePng[_currentId]!,
+                                    fit: BoxFit.contain,
+                                    width: 512,
+                                    height: 512,
+                                  ),
+                                ),
+                              ),
+
+                            // 3. ✏️ 화면 전역 펜/지우개 드로잉 레이어
+                            RepaintBoundary(
+                              key: _canvasKey,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onPanStart: _isPanMode
+                                    ? null
+                                    : (details) {
+                                  setState(() {
+                                    if (isAi) _slotAiDelegated[cat.id] = false;
+                                    if (_stage == CreationStage.choosing) _stage = CreationStage.drawing;
+                                    _redoStack.clear();
+                                    _currentPath = DrawingPath(
+                                      color: _selectedColor,
+                                      strokeWidth: _currentStrokeWidth,
+                                      isEraser: _isEraser,
+                                      points: [details.localPosition],
+                                    );
+                                    _paths.add(_currentPath!);
+                                  });
+                                },
+                                onPanUpdate: _isPanMode
+                                    ? null
+                                    : (details) {
+                                  setState(() => _currentPath?.points.add(details.localPosition));
+                                },
+                                onPanEnd: _isPanMode ? null : (_) => _currentPath = null,
+                                child: CustomPaint(
+                                  painter: TransparentDrawingPainter(_paths),
+                                  child: const SizedBox.expand(),
+                                ),
+                              ),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                      decoration: _chunky(color: Colors.white, edge: _cardEdge, radius: 24, depth: 4, border: _cardLine, borderWidth: 2),
-                      child: Row(
-                        children: [
-                          _canvasIconButton(Icons.undo_rounded, _paths.isEmpty ? null : () => setState(() => _redoStack.add(_paths.removeLast()))),
-                          _canvasIconButton(Icons.redo_rounded, _redoStack.isEmpty ? null : () => setState(() => _paths.add(_redoStack.removeLast()))),
-                          Container(width: 2, height: 22, color: _cardLine, margin: const EdgeInsets.symmetric(horizontal: 2)),
-                          _canvasIconButton(Icons.delete_rounded, _paths.isEmpty ? null : _clearCanvas, danger: true),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_stage == CreationStage.drawing)
-                    Positioned(
-                      bottom: 18,
-                      right: 18,
-                      child: _Pressable(
-                        onTap: _paths.isNotEmpty ? _startNaming : null,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-                          decoration: _paths.isNotEmpty
-                              ? _chunky(color: _green, radius: 30, depth: 5)
-                              : _chunky(color: const Color(0xFFE6E2EF), radius: 30, depth: 5),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.check_rounded, size: 22, color: _paths.isNotEmpty ? Colors.white : const Color(0xFFB0AAC0)),
-                              const SizedBox(width: 6),
-                              Text('다 그렸어!', style: TextStyle(fontSize: 18, color: _paths.isNotEmpty ? Colors.white : const Color(0xFFB0AAC0))),
-                            ],
-                          ),
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+                ),
+
+                // ── AI 위임 안내 ──
+                if (isAi)
+                  IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+                        decoration: _chunky(color: Colors.white, edge: _cardEdge, radius: 26, depth: 5, border: _cardLine),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🪄', style: TextStyle(fontSize: 44)),
+                            const SizedBox(height: 10),
+                            Text('루미가 ${cat.title}을(를) 대신 그려줄 거야!', style: const TextStyle(fontSize: 18, color: _ink)),
+                            const SizedBox(height: 4),
+                            const Text('직접 그리고 싶다면 바로 그려 봐 🎨', style: TextStyle(fontSize: 14, color: _sub)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else if (!hasCanvasDrawing)
+                  IgnorePointer(
+                    child: Center(
+                      child: AnimatedBuilder(
+                        animation: _floatingAnim,
+                        builder: (context, child) => Transform.translate(offset: Offset(0, _floatingAnim.value), child: child),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 104,
+                              height: 104,
+                              alignment: Alignment.center,
+                              decoration: _chunky(color: _tint(cat.color, 0.85), edge: _tint(cat.color, 0.6), shape: BoxShape.circle, depth: 5),
+                              child: Text(cat.emoji, style: const TextStyle(fontSize: 50)),
+                            ),
+                            const SizedBox(height: 16),
+                            Text('${_customSubject[cat.id] ?? cat.title}을(를) 자유롭게 그려봐!', style: TextStyle(fontSize: 22, color: _darken(cat.color, 0.05))),
+                            const SizedBox(height: 4),
+                            const Text('손가락이나 펜으로 쓱쓱 ✏️ (보라색 테두리 안쪽에 그려줘!)', style: TextStyle(fontSize: 15, color: _sub)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ── 상단 카테고리 태그 ──
+                Positioned(
+                  top: 14,
+                  left: 14,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(12, 7, 16, 7),
+                    decoration: _chunky(color: cat.color, radius: 20, depth: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(cat.emoji, style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 6),
+                        Text(_labelOf(cat.id), style: TextStyle(fontSize: 16, color: _onColor(cat.color))),
+                        if (cat.isRequired) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
+                            child: Text('필수', style: TextStyle(fontSize: 12, color: _onColor(cat.color))),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── 우상단 툴바 (실행취소 / 다시실행 / 🎯 화면 맞춤 / 전체삭제) ──
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                    decoration: _chunky(color: Colors.white, edge: _cardEdge, radius: 24, depth: 4, border: _cardLine, borderWidth: 2),
+                    child: Row(
+                      children: [
+                        _canvasIconButton(Icons.undo_rounded, _paths.isEmpty ? null : () => setState(() => _redoStack.add(_paths.removeLast()))),
+                        _canvasIconButton(Icons.redo_rounded, _redoStack.isEmpty ? null : () => setState(() => _paths.add(_redoStack.removeLast()))),
+                        // 🎯 누르면 즉시 화면 100% 꽉 찬 상태로 복귀
+                        _canvasIconButton(Icons.fit_screen_rounded, _fitCanvasToScreen),
+                        Container(width: 2, height: 22, color: _cardLine, margin: const EdgeInsets.symmetric(horizontal: 2)),
+                        _canvasIconButton(Icons.delete_rounded, _paths.isEmpty ? null : _clearCanvas, danger: true),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── 다 그렸어! 완료 버튼 ──
+                if (_stage == CreationStage.drawing)
+                  Positioned(
+                    bottom: 18,
+                    right: 18,
+                    child: _Pressable(
+                      // 🎯 [수정] 새로 그은 선이 있거나, 복원된 밑그림이 있으면 바로 완료 가능!
+                      onTap: hasCanvasDrawing ? _startNaming : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                        decoration: hasCanvasDrawing
+                            ? _chunky(color: _green, radius: 30, depth: 5)
+                            : _chunky(color: const Color(0xFFE6E2EF), radius: 30, depth: 5),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_rounded,
+                              size: 22,
+                              color: hasCanvasDrawing ? Colors.white : const Color(0xFFB0AAC0),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '다 그렸어!',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: hasCanvasDrawing ? Colors.white : const Color(0xFFB0AAC0),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -2208,8 +2882,21 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       decoration: BoxDecoration(color: const Color(0xFFF1EEF8), borderRadius: BorderRadius.circular(24)),
       child: Row(
         children: [
-          _toolSegment('🖍️', '펜', !_isEraser, () => setState(() => _isEraser = false)),
-          _toolSegment('🧽', '지우개', _isEraser, () => setState(() => _isEraser = true)),
+          _toolSegment('🖍️', '펜', !_isEraser && !_isPanMode, () {
+            setState(() {
+              _isEraser = false;
+              _isPanMode = false;
+            });
+          }),
+          _toolSegment('🧽', '지우개', _isEraser && !_isPanMode, () {
+            setState(() {
+              _isEraser = true;
+              _isPanMode = false;
+            });
+          }),
+          _toolSegment('✋', '이동', _isPanMode, () {
+            setState(() => _isPanMode = true);
+          }),
         ],
       ),
     );

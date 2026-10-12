@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 
 class FairyTale {
+  final String id; // 👈 [추가!] 동화 고유 식별자 (PK)
   final String title;
   final String description;
   final String imagePath;
@@ -21,6 +22,7 @@ class FairyTale {
   final String? originalTitle;
 
   FairyTale({
+    String? id, // 👈 [추가!] 선택 인자로 받음
     required this.title,
     required this.description,
     required this.imagePath,
@@ -31,9 +33,10 @@ class FairyTale {
     this.category = '동화',
     this.sourceFolder,
     this.originalTitle,
-  });
+  }): id = id ?? 'tale_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode}'; // 👈 없으면 타임스탬프 고유 ID 자동 부여
 
   FairyTale copyWith({
+    String? id, // 👈 [추가!] 복사 시에도 ID 유지
     String? title,
     String? description,
     String? imagePath,
@@ -46,6 +49,7 @@ class FairyTale {
     String? originalTitle,
   }) {
     return FairyTale(
+      id: id ?? this.id, // 👈 [추가!] 기존 고유 ID 그대로 물려받기
       title: title ?? this.title,
       description: description ?? this.description,
       imagePath: imagePath ?? this.imagePath,
@@ -113,7 +117,12 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
         final originalTitle = item['original_title']?.toString();
         final title = (item['title'] ?? '제목 없음').toString();
 
+        // 🎯 [핵심 추가] 백엔드가 내려준 고유 ID 추출 (id 또는 tale_id)
+        final rawId = item['id'] ?? item['tale_id'] ?? item['story_id'];
+
         return FairyTale(
+          // 🎯 [핵심 추가] 서버의 고유 ID를 기반으로 네임스페이스 키('tale_1', 'tale_2' 등) 확정!
+          id: rawId != null ? 'tale_$rawId' : 'tale_${title.hashCode}',
           title: title,
           description: (item['description'] ?? '동화를 읽어보세요.').toString(),
           imagePath: getCoverAssetPath(
