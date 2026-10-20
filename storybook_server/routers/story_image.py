@@ -49,6 +49,8 @@ class StoryIllustrationBatchRequest(BaseModel):
     pages: List[PageIllustrationRequest]
     drawn_assets_base64: Optional[Dict[str, str]] = None
     asset_images: Optional[Dict[str, str]] = None
+    # 에셋 ID별 아이가 붙인 이름·특징 ({"hero": {"name": "...", "desc": "..."}})
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None
 
     @property
     def assets(self) -> Dict[str, str]:
@@ -175,7 +177,8 @@ async def _extract_sketch_dna(cat_id: str, image_b64: str) -> tuple[str, str]:
 # 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 생성기
 async def _generate_single_page(
     p: PageIllustrationRequest,
-    blueprints_by_id: Dict[str, str]
+    blueprints_by_id: Dict[str, str],
+    hero_name: str = "",
 ) -> PageIllustrationResponse:
     print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
 
@@ -195,6 +198,10 @@ async def _generate_single_page(
     print(f"  👉 [{p.page_number}화] 활성화된 에셋: {active_keys}")
 
     clean_action_text = clean_story_text(p.scene_prompt)
+
+    # 아이가 붙인 주인공 이름 (없으면 일반 명칭)
+    hero_ref = f"'{hero_name}'" if hero_name else "the hero"
+    hero_ref_cap = f"'{hero_name}'" if hero_name else "The hero"
 
     if p.layout_type == "three_panel":
         layout_text = (
@@ -222,7 +229,7 @@ async def _generate_single_page(
         f"Scene Action & Composition: {layout_text}\n\n"
         "EXECUTION DIRECTIVES FOR GPT-IMAGE-2:\n"
         "1. CHARACTER RENDERING & PROTAGONIST IDENTITY:\n"
-        "   - THE DRAWN SPRITE IS THE CHARACTER: The declared <ENTITY id=\"hero\"> is Cheolsu himself. Strictly NEVER render an ordinary human boy, real child, or human body in the scene. Cheolsu MUST be rendered entirely as the unique drawn 2D character specified in its blueprint.\n"
+        f"   - THE DRAWN SPRITE IS THE CHARACTER: The declared <ENTITY id=\"hero\"> is {hero_ref} himself. Strictly NEVER render an ordinary human boy, real child, or human body in the scene. {hero_ref_cap} MUST be rendered entirely as the unique drawn 2D character specified in its blueprint.\n"
         "   - 2D SPRITE ART WITH GOLDEN AURA: Render declared character entities (<ENTITY>) as charming, expressive 2D hand-drawn character sprites retaining their original crayon/ink stroke feel and colors. Each declared character sprite must feature a gentle, warm, luminous golden aura contour that makes them shine naturally in the fairy tale world.\n"
         "   - EXPRESSIVE LIVING BEINGS: While keeping their core silhouette and signature colors (e.g., hair tufts, limb shapes, dot eyes) completely consistent, characters can express emotions, bend limbs, run, and interact naturally with the scene.\n\n"
         "2. STRICT TWO-LAYER SEPARATION (CHILD ENTITIES VS STORY PROPS):\n"
@@ -278,8 +285,10 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
 
     blueprints_by_id: Dict[str, str] = {cat_id: text for cat_id, text in extracted_dnas}
 
+    hero_name = ((req.asset_descriptions or {}).get("hero") or {}).get("name", "").strip()
+
     page_tasks = [
-        _generate_single_page(p, blueprints_by_id)
+        _generate_single_page(p, blueprints_by_id, hero_name)
         for p in req.pages
     ]
     results = await asyncio.gather(*page_tasks)

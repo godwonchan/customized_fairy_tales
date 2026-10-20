@@ -555,6 +555,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     // 🎯 OpenAI gpt-image-2 파이프라인 전송 페이로드 구성
     final payload = {
       'drawn_assets_base64': drawnAssetsBase64,
+      'asset_descriptions': widget.assetDescriptions, // 아이가 붙인 이름·특징
       'pages': targetIndexes.map((idx) {
         final p = _storyPages[idx];
 
