@@ -27,11 +27,18 @@ VISION_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.5")
 IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
 
 
-def clean_story_text(text: str) -> str:
-    """텍스트에서 [hero], [item] 등 대괄호 시스템 ID 태그를 완전히 제거"""
+def link_story_tags(text: str, asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None) -> str:
+    """[hero] 같은 에셋 ID 태그를 ENTITY 블록의 role 이름과 아이가 붙인 이름으로 바꿔 장면 속 행동 주체를 유지"""
     if not text:
         return ""
-    return re.sub(r'\[.*?\]\s*', '', text).strip()
+
+    def _replace(match: re.Match) -> str:
+        asset_id = match.group(1)
+        role = CATEGORY_LABELS.get(asset_id, asset_id.replace("_", " ").title()).lower()
+        name, _ = _asset_name_and_desc((asset_descriptions or {}).get(asset_id))
+        return f"the {role} '{name}'" if name else f"the {role}"
+
+    return re.sub(r"\[([A-Za-z0-9_]+)\]", _replace, text).strip()
 
 
 # ── Pydantic 모델 정의 ──
@@ -228,7 +235,7 @@ def _build_page_prompt(
     scene_entities_text = "\n\n".join(page_blueprints) if page_blueprints else "No specific character drawings provided."
     print(f"  👉 [{p.page_number}화] 활성화된 에셋: {active_keys}")
 
-    clean_action_text = clean_story_text(p.scene_prompt)
+    clean_action_text = link_story_tags(p.scene_prompt, asset_descriptions)
 
     # 아이가 붙인 주인공 이름 (없으면 일반 명칭)
     hero_ref = f"'{hero_name}'" if hero_name else "the hero"
