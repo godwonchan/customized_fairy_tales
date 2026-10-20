@@ -149,6 +149,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             'prompt': p['visual_scene_prompt'] ?? '',
             'characters': List<String>.from(p['characters'] ?? []),
           }).toList();
+          _pageImages.clear(); // 이야기가 바뀌었으므로 이전 그림은 사용하지 않음
           _isGenerating = false;
         });
 
@@ -168,6 +169,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       debugPrint('줄거리 생성 에러: $e');
       setState(() {
         _isGenerating = false;
+        _pageImages.clear();
         _storyTitle = '신비한 마법 모험 이야기';
         _storyPages = [
           {'page': '1화', 'title': '새로운 출발', 'content': '용감한 친구들이 함께 모여 신비한 비밀의 장소로 떠났어요!'},
@@ -449,8 +451,53 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     );
   }
 
+  // 페이지 인덱스별로 생성된 이미지 보관 (실패한 페이지만 다시 요청하기 위함)
+  final Map<int, String> _pageImages = {};
+
+  bool _hasImage(int index) => (_pageImages[index] ?? '').isNotEmpty;
+
   // ── 🎨 OpenAI gpt-image-2 일러스트 생성 요청 및 완성 뷰어 이동 ──
   Future<void> _createFinalStorybook() async {
+    // 이미지가 없는 페이지만 생성 요청
+    final targets = [
+      for (int i = 0; i < _storyPages.length; i++)
+        if (!_hasImage(i)) i,
+    ];
+
+    if (targets.isNotEmpty) {
+      _showPrintingDialog();
+      try {
+        await _requestIllustrations(targets);
+        if (mounted) Navigator.pop(context);
+      } catch (e) {
+        debugPrint('최종 동화책 생성 에러: $e');
+        if (!mounted) return;
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('동화책을 인쇄하는 중에 문제가 생겼어. 다시 시도해 줘!')),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+
+    final failed = [
+      for (int i = 0; i < _storyPages.length; i++)
+        if (!_hasImage(i)) i,
+    ];
+    if (failed.isNotEmpty) {
+      final retry = await _askRetryFailedPages(failed);
+      if (!mounted || retry == null) return;
+      if (retry) {
+        await _createFinalStorybook();
+        return;
+      }
+    }
+
+    _openReader();
+  }
+
+  void _showPrintingDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -487,77 +534,105 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         ),
       ),
     );
+  }
 
-    try {
-      final Map<String, String> drawnAssetsBase64 = {};
-      widget.assetPngBytes.forEach((catId, bytes) {
-        if (bytes != null && bytes.isNotEmpty && (widget.aiDelegated[catId] != true)) {
-          drawnAssetsBase64[catId] = base64Encode(bytes);
-        }
-      });
-
-      // 🎯 OpenAI gpt-image-2 파이프라인 전송 페이로드 구성
-      final payload = {
-        'drawn_assets_base64': drawnAssetsBase64,
-        'pages': _storyPages.asMap().entries.map((entry) {
-          final idx = entry.key;
-          final p = entry.value;
-
-          final safePrompt = (p['prompt'] != null && p['prompt'].toString().trim().isNotEmpty)
-              ? p['prompt'].toString().trim()
-              : 'A whimsical watercolor storybook illustration of the characters.';
-
-          return {
-            'page_number': idx + 1,
-            'scene_prompt': safePrompt,
-            'layout_type': p['layout_type'] ?? 'single',
-            'characters': p['characters'] ?? [],
-          };
-        }).toList(),
-      };
-
-      final res = await http.post(
-        Uri.parse('$_baseUrl/api/story/generate_illustrations'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
-
-      if (mounted) Navigator.pop(context);
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(res.bodyBytes));
-        final List illustrations = data['illustrations'] ?? [];
-
-        final List<Map<String, dynamic>> finalPages = [];
-        for (int i = 0; i < _storyPages.length; i++) {
-          finalPages.add({
-            ..._storyPages[i],
-            'imageUrl': (i < illustrations.length) ? illustrations[i]['image_url'] : '',
-          });
-        }
-
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => StoryReaderScreen(
-                title: _storyTitle,
-                pages: finalPages,
-                assetPngBytes: widget.assetPngBytes,
-                taleId: widget.taleId,
-              ),
-            ),
-          );
-        }
-      } else {
-        throw Exception('일러스트 생성 실패');
+  // 지정한 페이지들만 서버에 요청하고, 성공한 이미지를 _pageImages에 보관
+  Future<void> _requestIllustrations(List<int> targetIndexes) async {
+    final Map<String, String> drawnAssetsBase64 = {};
+    widget.assetPngBytes.forEach((catId, bytes) {
+      if (bytes != null && bytes.isNotEmpty && (widget.aiDelegated[catId] != true)) {
+        drawnAssetsBase64[catId] = base64Encode(bytes);
       }
-    } catch (e) {
-      if (mounted) Navigator.pop(context);
-      debugPrint('최종 동화책 생성 에러: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('동화책을 인쇄하는 중에 문제가 생겼어. 다시 시도해 줘!')),
-      );
+    });
+
+    // 🎯 OpenAI gpt-image-2 파이프라인 전송 페이로드 구성
+    final payload = {
+      'drawn_assets_base64': drawnAssetsBase64,
+      'pages': targetIndexes.map((idx) {
+        final p = _storyPages[idx];
+
+        final safePrompt = (p['prompt'] != null && p['prompt'].toString().trim().isNotEmpty)
+            ? p['prompt'].toString().trim()
+            : 'A whimsical watercolor storybook illustration of the characters.';
+
+        return {
+          'page_number': idx + 1,
+          'scene_prompt': safePrompt,
+          'layout_type': p['layout_type'] ?? 'single',
+          'characters': p['characters'] ?? [],
+        };
+      }).toList(),
+    };
+
+    final res = await http.post(
+      Uri.parse('$_baseUrl/api/story/generate_illustrations'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('일러스트 생성 실패: ${res.statusCode}');
     }
+
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    final List illustrations = data['illustrations'] ?? [];
+    for (final item in illustrations) {
+      final idx = (item['page_number'] as int) - 1;
+      final url = (item['image_url'] ?? '').toString();
+      if (url.isNotEmpty) {
+        _pageImages[idx] = url;
+      } else {
+        debugPrint('[${idx + 1}페이지] 그림 생성 실패: ${item['error']}');
+      }
+    }
+  }
+
+  // 실패한 페이지가 있을 때 다시 그릴지 묻기 (true: 다시 그리기, false: 그대로 보기, null: 닫기)
+  Future<bool?> _askRetryFailedPages(List<int> failedIndexes) {
+    final pageLabels = failedIndexes.map((i) => '${i + 1}').join(', ');
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('그림 몇 장을 못 그렸어', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF3D2C8D))),
+        content: Text('$pageLabels페이지 그림을 그리지 못했어.\n이 페이지만 다시 그려 볼까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('그림 없이 볼래', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7E57C2),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('다시 그리기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openReader() {
+    final List<Map<String, dynamic>> finalPages = [
+      for (int i = 0; i < _storyPages.length; i++)
+        {
+          ..._storyPages[i],
+          'imageUrl': _pageImages[i] ?? '',
+        },
+    ];
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => StoryReaderScreen(
+          title: _storyTitle,
+          pages: finalPages,
+          assetPngBytes: widget.assetPngBytes,
+          taleId: widget.taleId,
+        ),
+      ),
+    );
   }
 }

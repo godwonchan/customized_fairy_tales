@@ -5,7 +5,7 @@ import time
 import base64
 import asyncio
 from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from PIL import Image
@@ -58,6 +58,7 @@ class StoryIllustrationBatchRequest(BaseModel):
 class PageIllustrationResponse(BaseModel):
     page_number: int
     image_url: str
+    error: Optional[str] = None  # 실패한 페이지는 image_url을 비우고 사유를 담음
 
 
 class StoryIllustrationBatchResponse(BaseModel):
@@ -256,8 +257,9 @@ async def _generate_single_page(
             raise ValueError("이미지 데이터가 없습니다.")
 
     except Exception as e:
+        # 한 페이지 실패가 요청 전체를 실패시키지 않도록, 예외 대신 빈 이미지와 사유를 반환
         print(f"❌ [{p.page_number}화] {IMAGE_MODEL} 생성 실패: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return PageIllustrationResponse(page_number=p.page_number, image_url="", error=str(e))
 
 
 @router.post("/generate_illustrations", response_model=StoryIllustrationBatchResponse)
