@@ -79,6 +79,21 @@ CATEGORY_LABELS = {
 }
 
 
+# 앱이 "AI에게 맡기기"를 고른 에셋에 붙이는 표시 문구 (이미지 프롬프트에는 넣지 않음)
+AI_DELEGATED_NAME_SUFFIX = "(AI 생성)"
+AI_DELEGATED_DESC = "요정이 대신 상상해서 그릴 예정"
+
+
+def _asset_name_and_desc(info: Optional[Dict[str, str]]) -> tuple[str, str]:
+    """asset_descriptions 항목에서 앱의 표시용 문구를 걷어낸 이름·특징을 반환"""
+    info = info or {}
+    name = info.get("name", "").replace(AI_DELEGATED_NAME_SUFFIX, "").strip()
+    desc = info.get("desc", "").strip()
+    if desc == AI_DELEGATED_DESC:
+        desc = ""
+    return name, desc
+
+
 def _flatten_to_white_bg(base64_str: str) -> str:
     """투명 배경 PNG를 흰색 배경으로 합성"""
     try:
@@ -179,19 +194,34 @@ async def _generate_single_page(
     p: PageIllustrationRequest,
     blueprints_by_id: Dict[str, str],
     hero_name: str = "",
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
 ) -> PageIllustrationResponse:
     print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
 
+    # 그림 없이 이름·특징만 있는 에셋(AI에게 맡긴 캐릭터)의 설명
+    described_by_id: Dict[str, str] = {}
+    for k, info in (asset_descriptions or {}).items():
+        name, desc = _asset_name_and_desc(info)
+        if k in blueprints_by_id or not name:
+            continue
+        described_by_id[k] = (
+            "NO DRAWING PROVIDED: Design this entity yourself from its role and the child's words, "
+            "and keep the same design on every page.\n"
+            f"- Name: '{name}'\n"
+            f"- Child's description: {desc or 'none'}"
+        )
+
     active_candidate_ids = p.active_asset_ids
-    active_keys = [k for k in active_candidate_ids if k in blueprints_by_id]
+    active_keys = [k for k in active_candidate_ids if k in blueprints_by_id or k in described_by_id]
     if not active_keys and blueprints_by_id:
         active_keys = [next(iter(blueprints_by_id))]
 
     page_blueprints = []
     for k in active_keys:
         label = CATEGORY_LABELS.get(k, k.replace("_", " ").title())
+        entity_text = blueprints_by_id.get(k) or described_by_id[k]
         page_blueprints.append(
-            f'<ENTITY count="1" id="{k}" role="{label}">\n{blueprints_by_id[k]}\n</ENTITY>'
+            f'<ENTITY count="1" id="{k}" role="{label}">\n{entity_text}\n</ENTITY>'
         )
 
     scene_entities_text = "\n\n".join(page_blueprints) if page_blueprints else "No specific character drawings provided."
@@ -285,10 +315,10 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
 
     blueprints_by_id: Dict[str, str] = {cat_id: text for cat_id, text in extracted_dnas}
 
-    hero_name = ((req.asset_descriptions or {}).get("hero") or {}).get("name", "").strip()
+    hero_name, _ = _asset_name_and_desc((req.asset_descriptions or {}).get("hero"))
 
     page_tasks = [
-        _generate_single_page(p, blueprints_by_id, hero_name)
+        _generate_single_page(p, blueprints_by_id, hero_name, req.asset_descriptions)
         for p in req.pages
     ]
     results = await asyncio.gather(*page_tasks)
