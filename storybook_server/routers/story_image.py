@@ -4,6 +4,9 @@ import re
 import time
 import base64
 import asyncio
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -189,15 +192,13 @@ async def _extract_sketch_dna(cat_id: str, image_b64: str) -> tuple[str, str]:
         return cat_id, f"A 2D hand-drawn character design for {role_label}"
 
 
-# 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 생성기
-async def _generate_single_page(
+# 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 프롬프트 생성기
+def _build_page_prompt(
     p: PageIllustrationRequest,
     blueprints_by_id: Dict[str, str],
     hero_name: str = "",
     asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
-) -> PageIllustrationResponse:
-    print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
-
+) -> str:
     # 그림 없이 이름·특징만 있는 에셋(AI에게 맡긴 캐릭터)의 설명
     described_by_id: Dict[str, str] = {}
     for k, info in (asset_descriptions or {}).items():
@@ -246,7 +247,7 @@ async def _generate_single_page(
 
     # 🌟 OpenAI gpt-image-2 전용 일러스트 프롬프트
     # - 검증된 2D 손그림 캐릭터 스프라이트 + 부드러운 금빛 아우라 스타일 복원
-    # - 도플갱어 인간 아이 렌더링 엄격 차단 (아이가 그린 [hero]가 곧 주인공 철수)
+    # - 도플갱어 인간 아이 렌더링 엄격 차단 (아이가 그린 [hero]가 곧 주인공)
     # - 이야기 추가 소품(이불, 밧줄) 2계층 분리 (금빛 테두리 제외)
     # - 활성 엔티티 전원 무대 배치 (Anti-Dropping)
     image_prompt = (
@@ -273,6 +274,18 @@ async def _generate_single_page(
         "5. CLEAN PICTURE BOOK ART:\n"
         "   - Pure illustration. Absolutely NO text, NO speech bubbles, NO subtitles, NO watermarks."
     )
+    return image_prompt
+
+
+# 🎨 3. 페이지 한 장 생성 (실패 시 예외 대신 빈 이미지와 사유 반환)
+async def _generate_single_page(
+    p: PageIllustrationRequest,
+    blueprints_by_id: Dict[str, str],
+    hero_name: str = "",
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
+) -> PageIllustrationResponse:
+    print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
+    image_prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions)
 
     try:
         response = await client.images.generate(
@@ -323,4 +336,60 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
     ]
     results = await asyncio.gather(*page_tasks)
 
+    if os.getenv("PROMPT_EVAL_CAPTURE") == "1":
+        _save_eval_capture(req, blueprints_by_id, hero_name, list(results))
+
     return StoryIllustrationBatchResponse(illustrations=list(results))
+
+
+# 🧪 프롬프트 비교 테스트용 입력 저장 (PROMPT_EVAL_CAPTURE=1 일 때만 동작)
+PROMPT_EVAL_DIR = Path(__file__).resolve().parent.parent / "prompt_eval"
+
+
+def save_page_outputs(
+    out_dir: Path,
+    pages: List[PageIllustrationRequest],
+    blueprints_by_id: Dict[str, str],
+    hero_name: str,
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]],
+    results: List[PageIllustrationResponse],
+) -> None:
+    """페이지별 실제 사용된 프롬프트와 생성 이미지를 out_dir에 저장"""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    by_page = {r.page_number: r for r in results}
+    for p in pages:
+        prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions)
+        (out_dir / f"page_{p.page_number}_prompt.txt").write_text(prompt, encoding="utf-8")
+
+        r = by_page.get(p.page_number)
+        if r is None:
+            continue
+        if r.image_url.startswith("data:image"):
+            (out_dir / f"page_{p.page_number}.png").write_bytes(base64.b64decode(r.image_url.split(",", 1)[1]))
+        elif r.image_url:
+            (out_dir / f"page_{p.page_number}_url.txt").write_text(r.image_url, encoding="utf-8")
+        else:
+            (out_dir / f"page_{p.page_number}_error.txt").write_text(r.error or "", encoding="utf-8")
+
+
+def _save_eval_capture(
+    req: StoryIllustrationBatchRequest,
+    blueprints_by_id: Dict[str, str],
+    hero_name: str,
+    results: List[PageIllustrationResponse],
+) -> None:
+    try:
+        capture_dir = PROMPT_EVAL_DIR / "inputs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        (capture_dir / "request.json").write_text(
+            json.dumps(req.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (capture_dir / "blueprints.json").write_text(
+            json.dumps(blueprints_by_id, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        save_page_outputs(
+            capture_dir / "before", req.pages, blueprints_by_id, hero_name, req.asset_descriptions, results
+        )
+        print(f"🧪 [프롬프트 비교용 입력 저장] {capture_dir}", flush=True)
+    except Exception as e:
+        print(f"⚠️ 프롬프트 비교용 입력 저장 실패: {e}", flush=True)
