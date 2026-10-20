@@ -149,7 +149,6 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             'prompt': p['visual_scene_prompt'] ?? '',
             'characters': List<String>.from(p['characters'] ?? []),
           }).toList();
-          _pageImages.clear(); // 이야기가 바뀌었으므로 이전 그림은 사용하지 않음
           _isGenerating = false;
         });
 
@@ -169,7 +168,6 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       debugPrint('줄거리 생성 에러: $e');
       setState(() {
         _isGenerating = false;
-        _pageImages.clear();
         _storyTitle = '신비한 마법 모험 이야기';
         _storyPages = [
           {'page': '1화', 'title': '새로운 출발', 'content': '용감한 친구들이 함께 모여 신비한 비밀의 장소로 떠났어요!'},
@@ -451,10 +449,19 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     );
   }
 
-  // 페이지 인덱스별로 생성된 이미지 보관 (실패한 페이지만 다시 요청하기 위함)
+  // 페이지 인덱스별로 생성된 이미지와, 생성 당시의 장면 정보를 보관
+  // (장면 정보가 그대로인 페이지는 다시 그리지 않음)
   final Map<int, String> _pageImages = {};
+  final Map<int, String> _pageImageSignatures = {};
 
-  bool _hasImage(int index) => (_pageImages[index] ?? '').isNotEmpty;
+  String _sceneSignature(int index) {
+    final p = _storyPages[index];
+    return jsonEncode([p['prompt'] ?? '', p['layout_type'] ?? 'single', p['characters'] ?? []]);
+  }
+
+  bool _hasImage(int index) =>
+      (_pageImages[index] ?? '').isNotEmpty &&
+      _pageImageSignatures[index] == _sceneSignature(index);
 
   // ── 🎨 OpenAI gpt-image-2 일러스트 생성 요청 및 완성 뷰어 이동 ──
   Future<void> _createFinalStorybook() async {
@@ -581,6 +588,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       final url = (item['image_url'] ?? '').toString();
       if (url.isNotEmpty) {
         _pageImages[idx] = url;
+        _pageImageSignatures[idx] = _sceneSignature(idx);
       } else {
         debugPrint('[${idx + 1}페이지] 그림 생성 실패: ${item['error']}');
       }
@@ -619,7 +627,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       for (int i = 0; i < _storyPages.length; i++)
         {
           ..._storyPages[i],
-          'imageUrl': _pageImages[i] ?? '',
+          'imageUrl': _hasImage(i) ? _pageImages[i]! : '',
         },
     ];
 
