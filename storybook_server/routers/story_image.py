@@ -4,8 +4,11 @@ import re
 import time
 import base64
 import asyncio
+import json
+from datetime import datetime
+from pathlib import Path
 from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 from PIL import Image
@@ -24,11 +27,18 @@ VISION_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-5.5")
 IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2")
 
 
-def clean_story_text(text: str) -> str:
-    """텍스트에서 [hero], [item] 등 대괄호 시스템 ID 태그를 완전히 제거"""
+def link_story_tags(text: str, asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None) -> str:
+    """[hero] 같은 에셋 ID 태그를 ENTITY 블록의 role 이름과 아이가 붙인 이름으로 바꿔 장면 속 행동 주체를 유지"""
     if not text:
         return ""
-    return re.sub(r'\[.*?\]\s*', '', text).strip()
+
+    def _replace(match: re.Match) -> str:
+        asset_id = match.group(1)
+        role = CATEGORY_LABELS.get(asset_id, asset_id.replace("_", " ").title()).lower()
+        name, _ = _asset_name_and_desc((asset_descriptions or {}).get(asset_id))
+        return f"the {role} '{name}'" if name else f"the {role}"
+
+    return re.sub(r"\[([A-Za-z0-9_]+)\]", _replace, text).strip()
 
 
 # ── Pydantic 모델 정의 ──
@@ -49,6 +59,8 @@ class StoryIllustrationBatchRequest(BaseModel):
     pages: List[PageIllustrationRequest]
     drawn_assets_base64: Optional[Dict[str, str]] = None
     asset_images: Optional[Dict[str, str]] = None
+    # 에셋 ID별 아이가 붙인 이름·특징 ({"hero": {"name": "...", "desc": "..."}})
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None
 
     @property
     def assets(self) -> Dict[str, str]:
@@ -58,6 +70,7 @@ class StoryIllustrationBatchRequest(BaseModel):
 class PageIllustrationResponse(BaseModel):
     page_number: int
     image_url: str
+    error: Optional[str] = None  # 실패한 페이지는 image_url을 비우고 사유를 담음
 
 
 class StoryIllustrationBatchResponse(BaseModel):
@@ -74,6 +87,21 @@ CATEGORY_LABELS = {
     "food": "Magical Food",
     "treasure": "Hidden Treasure",
 }
+
+
+# 앱이 "AI에게 맡기기"를 고른 에셋에 붙이는 표시 문구 (이미지 프롬프트에는 넣지 않음)
+AI_DELEGATED_NAME_SUFFIX = "(AI 생성)"
+AI_DELEGATED_DESC = "요정이 대신 상상해서 그릴 예정"
+
+
+def _asset_name_and_desc(info: Optional[Dict[str, str]]) -> tuple[str, str]:
+    """asset_descriptions 항목에서 앱의 표시용 문구를 걷어낸 이름·특징을 반환"""
+    info = info or {}
+    name = info.get("name", "").replace(AI_DELEGATED_NAME_SUFFIX, "").strip()
+    desc = info.get("desc", "").strip()
+    if desc == AI_DELEGATED_DESC:
+        desc = ""
+    return name, desc
 
 
 def _flatten_to_white_bg(base64_str: str) -> str:
@@ -171,29 +199,88 @@ async def _extract_sketch_dna(cat_id: str, image_b64: str) -> tuple[str, str]:
         return cat_id, f"A 2D hand-drawn character design for {role_label}"
 
 
-# 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 생성기
-async def _generate_single_page(
+# ✏️ 그림 없이 맡긴 에셋의 디자인 시트를 한 번만 만들어 모든 페이지에 같은 모습으로 쓰이게 함
+async def _design_undrawn_asset(cat_id: str, name: str, desc: str) -> tuple[str, str]:
+    role_label = CATEGORY_LABELS.get(cat_id, cat_id.replace("_", " ").title())
+    prompt_text = (
+        f"Design one concrete look for the '{role_label}' named '{name}' in a children's storybook. "
+        f"The child's description: {desc or 'none'}. "
+        "Write a short English design sheet (3-5 lines, no filler) that fixes its shape, size, "
+        "main colors, and distinctive features, so an illustrator draws it identically on every page."
+    )
+    try:
+        res = await client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[{"role": "user", "content": prompt_text}],
+            max_completion_tokens=1500,
+        )
+        sheet = res.choices[0].message.content.strip()
+        print(f"✏️ [디자인 시트 생성 완료] {role_label} '{name}':\n{sheet}\n", flush=True)
+        return cat_id, sheet
+    except Exception as e:
+        print(f"⚠️ {role_label} 디자인 시트 생성 오류: {e}", flush=True)
+        return cat_id, ""
+
+
+async def design_undrawn_assets(
+    blueprints_by_id: Dict[str, str],
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]],
+) -> Dict[str, str]:
+    """그림이 없고 이름만 있는 에셋마다 디자인 시트를 생성"""
+    tasks = []
+    for k, info in (asset_descriptions or {}).items():
+        name, desc = _asset_name_and_desc(info)
+        if k in blueprints_by_id or not name:
+            continue
+        tasks.append(_design_undrawn_asset(k, name, desc))
+    return {k: sheet for k, sheet in await asyncio.gather(*tasks) if sheet}
+
+
+# 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 프롬프트 생성기
+def _build_page_prompt(
     p: PageIllustrationRequest,
-    blueprints_by_id: Dict[str, str]
-) -> PageIllustrationResponse:
-    print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
+    blueprints_by_id: Dict[str, str],
+    hero_name: str = "",
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
+) -> str:
+    # 그림 없이 이름·특징만 있는 에셋(AI에게 맡긴 캐릭터)의 설명
+    described_by_id: Dict[str, str] = {}
+    for k, info in (asset_descriptions or {}).items():
+        name, desc = _asset_name_and_desc(info)
+        if k in blueprints_by_id or not name:
+            continue
+        described_by_id[k] = (
+            "NO DRAWING PROVIDED: Design this entity yourself from its role and the child's words, "
+            "and keep the same design on every page.\n"
+            f"- Name: '{name}'\n"
+            f"- Child's description: {desc or 'none'}"
+        )
+        sheet = (design_sheets_by_id or {}).get(k)
+        if sheet:
+            described_by_id[k] += f"\n- Fixed design sheet (draw exactly this design):\n{sheet}"
 
     active_candidate_ids = p.active_asset_ids
-    active_keys = [k for k in active_candidate_ids if k in blueprints_by_id]
+    active_keys = [k for k in active_candidate_ids if k in blueprints_by_id or k in described_by_id]
     if not active_keys and blueprints_by_id:
         active_keys = [next(iter(blueprints_by_id))]
 
     page_blueprints = []
     for k in active_keys:
         label = CATEGORY_LABELS.get(k, k.replace("_", " ").title())
+        entity_text = blueprints_by_id.get(k) or described_by_id[k]
         page_blueprints.append(
-            f'<ENTITY count="1" id="{k}" role="{label}">\n{blueprints_by_id[k]}\n</ENTITY>'
+            f'<ENTITY count="1" id="{k}" role="{label}">\n{entity_text}\n</ENTITY>'
         )
 
     scene_entities_text = "\n\n".join(page_blueprints) if page_blueprints else "No specific character drawings provided."
     print(f"  👉 [{p.page_number}화] 활성화된 에셋: {active_keys}")
 
-    clean_action_text = clean_story_text(p.scene_prompt)
+    clean_action_text = link_story_tags(p.scene_prompt, asset_descriptions)
+
+    # 아이가 붙인 주인공 이름 (없으면 일반 명칭)
+    hero_ref = f"'{hero_name}'" if hero_name else "the hero"
+    hero_ref_cap = f"'{hero_name}'" if hero_name else "The hero"
 
     if p.layout_type == "three_panel":
         layout_text = (
@@ -201,14 +288,22 @@ async def _generate_single_page(
             "- TOP HALF (Wide Establishing Panel): One full-width horizontal panel showing the main situation.\n"
             "- BOTTOM HALF (Split Sequential Panels): Two equal side-by-side square panels (Left and Right) showing sequential reactions and actions.\n"
             f"Narrative Flow: {clean_action_text}\n"
-            "Keep all panels and figures safely inside the borders. Maintain identical character designs and golden auras across all three panels."
+            "Keep all panels and figures safely inside the borders. Maintain identical character designs across all three panels, with golden auras only on declared <ENTITY> sprites."
+        )
+    elif p.layout_type == "two_panel":
+        layout_text = (
+            "Format: A 2-panel story comic layout on a single canvas, separated by one clean thin horizontal border:\n"
+            "- TOP HALF: One full-width horizontal panel showing the first moment.\n"
+            "- BOTTOM HALF: One full-width horizontal panel showing the next moment.\n"
+            f"Narrative Flow: {clean_action_text}\n"
+            "Keep all panels and figures safely inside the borders. Maintain identical character designs across both panels, with golden auras only on declared <ENTITY> sprites."
         )
     else:
         layout_text = f"Scene Action: {clean_action_text}"
 
     # 🌟 OpenAI gpt-image-2 전용 일러스트 프롬프트
     # - 검증된 2D 손그림 캐릭터 스프라이트 + 부드러운 금빛 아우라 스타일 복원
-    # - 도플갱어 인간 아이 렌더링 엄격 차단 (아이가 그린 [hero]가 곧 주인공 철수)
+    # - 도플갱어 인간 아이 렌더링 엄격 차단 (아이가 그린 [hero]가 곧 주인공)
     # - 이야기 추가 소품(이불, 밧줄) 2계층 분리 (금빛 테두리 제외)
     # - 활성 엔티티 전원 무대 배치 (Anti-Dropping)
     image_prompt = (
@@ -221,12 +316,13 @@ async def _generate_single_page(
         f"Scene Action & Composition: {layout_text}\n\n"
         "EXECUTION DIRECTIVES FOR GPT-IMAGE-2:\n"
         "1. CHARACTER RENDERING & PROTAGONIST IDENTITY:\n"
-        "   - THE DRAWN SPRITE IS THE CHARACTER: The declared <ENTITY id=\"hero\"> is Cheolsu himself. Strictly NEVER render an ordinary human boy, real child, or human body in the scene. Cheolsu MUST be rendered entirely as the unique drawn 2D character specified in its blueprint.\n"
+        f"   - THE DRAWN SPRITE IS THE CHARACTER: The declared <ENTITY id=\"hero\"> is {hero_ref} himself. Strictly NEVER render an ordinary human boy, real child, or human body in the scene. {hero_ref_cap} MUST be rendered entirely as the unique drawn 2D character specified in its blueprint.\n"
         "   - 2D SPRITE ART WITH GOLDEN AURA: Render declared character entities (<ENTITY>) as charming, expressive 2D hand-drawn character sprites retaining their original crayon/ink stroke feel and colors. Each declared character sprite must feature a gentle, warm, luminous golden aura contour that makes them shine naturally in the fairy tale world.\n"
         "   - EXPRESSIVE LIVING BEINGS: While keeping their core silhouette and signature colors (e.g., hair tufts, limb shapes, dot eyes) completely consistent, characters can express emotions, bend limbs, run, and interact naturally with the scene.\n\n"
         "2. STRICT TWO-LAYER SEPARATION (CHILD ENTITIES VS STORY PROPS):\n"
         "   - GOLDEN AURA ONLY FOR DECLARED ENTITIES: Only the declared <ENTITY> sprites receive the warm golden aura.\n"
-        "   - STORY-ADDED PROPS ARE ORDINARY WATERCOLOR OBJECTS: Any additional items, bedding, blankets, ropes, bowls, jars, or rocks mentioned in the narrative that are NOT declared <ENTITY> items must be rendered as ordinary background watercolor objects with painterly washes. Absolutely ZERO golden outlines or glowing edges on story-added props.\n\n"
+        "   - STORY-ADDED PROPS ARE ORDINARY WATERCOLOR OBJECTS: Any additional items, bedding, blankets, ropes, bowls, jars, or rocks mentioned in the narrative that are NOT declared <ENTITY> items must be rendered as ordinary background watercolor objects with painterly washes. Absolutely ZERO golden outlines or glowing edges on story-added props.\n"
+        "   - STORY-ADDED SIDE CHARACTERS ARE WATERCOLOR TOO: Any creature, animal, or person in the scene that is NOT a declared <ENTITY> (a side character added by the story) must be painted in the same soft watercolor style as the background world. Absolutely ZERO golden aura, glowing outline, or crayon-sprite look on side characters.\n\n"
         "3. FULL ENTITY PRESENCE (ANTI-DROPPING PROTOCOL):\n"
         "   - Every declared character entity in the active asset list MUST appear visibly on stage as an independent, active participant. Never omit or replace any declared character with mere inanimate props or background marks.\n\n"
         "4. SCENERY & ENVIRONMENT INTEGRATION:\n"
@@ -235,6 +331,19 @@ async def _generate_single_page(
         "5. CLEAN PICTURE BOOK ART:\n"
         "   - Pure illustration. Absolutely NO text, NO speech bubbles, NO subtitles, NO watermarks."
     )
+    return image_prompt
+
+
+# 🎨 3. 페이지 한 장 생성 (실패 시 예외 대신 빈 이미지와 사유 반환)
+async def _generate_single_page(
+    p: PageIllustrationRequest,
+    blueprints_by_id: Dict[str, str],
+    hero_name: str = "",
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
+) -> PageIllustrationResponse:
+    print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
+    image_prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions, design_sheets_by_id)
 
     try:
         response = await client.images.generate(
@@ -256,8 +365,9 @@ async def _generate_single_page(
             raise ValueError("이미지 데이터가 없습니다.")
 
     except Exception as e:
+        # 한 페이지 실패가 요청 전체를 실패시키지 않도록, 예외 대신 빈 이미지와 사유를 반환
         print(f"❌ [{p.page_number}화] {IMAGE_MODEL} 생성 실패: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        return PageIllustrationResponse(page_number=p.page_number, image_url="", error=str(e))
 
 
 @router.post("/generate_illustrations", response_model=StoryIllustrationBatchResponse)
@@ -276,10 +386,72 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
 
     blueprints_by_id: Dict[str, str] = {cat_id: text for cat_id, text in extracted_dnas}
 
+    hero_name, _ = _asset_name_and_desc((req.asset_descriptions or {}).get("hero"))
+    design_sheets_by_id = await design_undrawn_assets(blueprints_by_id, req.asset_descriptions)
+
     page_tasks = [
-        _generate_single_page(p, blueprints_by_id)
+        _generate_single_page(p, blueprints_by_id, hero_name, req.asset_descriptions, design_sheets_by_id)
         for p in req.pages
     ]
     results = await asyncio.gather(*page_tasks)
 
+    if os.getenv("PROMPT_EVAL_CAPTURE") == "1":
+        _save_eval_capture(req, blueprints_by_id, hero_name, list(results), design_sheets_by_id)
+
     return StoryIllustrationBatchResponse(illustrations=list(results))
+
+
+# 🧪 프롬프트 비교 테스트용 입력 저장 (PROMPT_EVAL_CAPTURE=1 일 때만 동작)
+PROMPT_EVAL_DIR = Path(__file__).resolve().parent.parent / "prompt_eval"
+
+
+def save_page_outputs(
+    out_dir: Path,
+    pages: List[PageIllustrationRequest],
+    blueprints_by_id: Dict[str, str],
+    hero_name: str,
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]],
+    results: List[PageIllustrationResponse],
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
+) -> None:
+    """페이지별 실제 사용된 프롬프트와 생성 이미지를 out_dir에 저장"""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    by_page = {r.page_number: r for r in results}
+    for p in pages:
+        prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions, design_sheets_by_id)
+        (out_dir / f"page_{p.page_number}_prompt.txt").write_text(prompt, encoding="utf-8")
+
+        r = by_page.get(p.page_number)
+        if r is None:
+            continue
+        if r.image_url.startswith("data:image"):
+            (out_dir / f"page_{p.page_number}.png").write_bytes(base64.b64decode(r.image_url.split(",", 1)[1]))
+        elif r.image_url:
+            (out_dir / f"page_{p.page_number}_url.txt").write_text(r.image_url, encoding="utf-8")
+        else:
+            (out_dir / f"page_{p.page_number}_error.txt").write_text(r.error or "", encoding="utf-8")
+
+
+def _save_eval_capture(
+    req: StoryIllustrationBatchRequest,
+    blueprints_by_id: Dict[str, str],
+    hero_name: str,
+    results: List[PageIllustrationResponse],
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
+) -> None:
+    try:
+        capture_dir = PROMPT_EVAL_DIR / "inputs" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        capture_dir.mkdir(parents=True, exist_ok=True)
+        (capture_dir / "request.json").write_text(
+            json.dumps(req.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (capture_dir / "blueprints.json").write_text(
+            json.dumps(blueprints_by_id, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        save_page_outputs(
+            capture_dir / "before", req.pages, blueprints_by_id, hero_name, req.asset_descriptions, results,
+            design_sheets_by_id,
+        )
+        print(f"🧪 [프롬프트 비교용 입력 저장] {capture_dir}", flush=True)
+    except Exception as e:
+        print(f"⚠️ 프롬프트 비교용 입력 저장 실패: {e}", flush=True)

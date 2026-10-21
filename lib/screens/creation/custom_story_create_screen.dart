@@ -649,19 +649,6 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       matchingKeys.addAll(allKeys.where((k) => k.startsWith(p2)));
     }
 
-    // 3차: ID 부분 일치 탐색 (ID가 포함된 모든 sketch_png 키)
-    if (matchingKeys.isEmpty) {
-      matchingKeys.addAll(allKeys.where((k) => k.contains(cleanTarget) && k.contains('_sketch_png_')));
-    }
-
-    // 4차: 최후의 폴백 (저장소에 존재하는 가장 최근 sketch_png 그룹 탐색)
-    if (matchingKeys.isEmpty) {
-      debugPrint('⚠️ [1~3차 탐색 실패] 대상 ID로 키를 찾지 못함. 전체 저장소 폴백 탐색 시도...');
-      final allPngKeys = allKeys.where((k) => k.contains('_sketch_png_')).toList();
-      debugPrint('   -> 저장소 내 전체 그림 키 목록: $allPngKeys');
-      matchingKeys.addAll(allPngKeys);
-    }
-
     debugPrint('📦 [발견된 그림 키 수]: ${matchingKeys.length}개 -> $matchingKeys');
 
     // ── 5. PNG 데이터 디코딩 및 메모리 바인딩 ──
@@ -1322,73 +1309,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       return;
     }
 
-    if (_cachedStoryData != null) {
-      final String? action = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Row(
-            children: [
-              Icon(Icons.auto_stories_rounded, color: _purple, size: 26),
-              SizedBox(width: 8),
-              Text('이야기 만들기 선택', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deep)),
-            ],
-          ),
-          content: const Text(
-            '이전에 만든 멋진 줄거리가 남아있어요!\n어떻게 진행할까요?',
-            style: TextStyle(fontSize: 14, color: Color(0xFF4A4458), height: 1.5),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'keep_story'),
-                  icon: const Icon(Icons.brush_rounded, size: 18),
-                  label: const Text('기존 줄거리에 바뀐 그림만 적용할래', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _purple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'new_story'),
-                  icon: const Icon(Icons.refresh_rounded, size: 18, color: _purple),
-                  label: const Text('줄거리도 완전히 새로 만들래', style: TextStyle(color: _purple, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFD1C4E9)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-
-      if (action == null) return;
-
-      if (action == 'keep_story') {
-        final updatedStoryData = Map<String, dynamic>.from(_cachedStoryData!);
-        final List updatedPages = List.from(updatedStoryData['pages'] ?? []);
-        for (int i = 0; i < updatedPages.length; i++) {
-          final pageInfo = Map<String, dynamic>.from(updatedPages[i]);
-          pageInfo['prompt'] = '';
-          updatedPages[i] = pageInfo;
-        }
-        updatedStoryData['pages'] = updatedPages;
-        _cachedStoryData = updatedStoryData;
-      } else if (action == 'new_story') {
-        _cachedStoryData = null;
-      }
-    }
+    // 이전 줄거리가 있으면 묻지 않고 그대로 이어감 (그림이 바뀐 캐릭터가 나오는 페이지만 미리보기에서 다시 그림)
 
     _haltAudio();
     if (!mounted) return;

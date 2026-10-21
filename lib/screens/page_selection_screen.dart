@@ -423,7 +423,8 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
               // 🌟 1. [신규 추가] 기존 동화 대본을 들고 새 창작 팔레트로 분기하는 버튼
               GestureDetector(
                 onTap: () {
-                  final taleIdStr = widget.tale.id; // 👈 현재 동화의 고유 ID 추출
+                  // 👈 서버 story_id 기반 ID (저장 시 그림 키와 동일한 규칙: tale_<storyId>)
+                  final taleIdStr = widget.tale.storyId != null ? 'tale_${widget.tale.storyId}' : widget.tale.id;
 
                   // 기존 4화 대본 데이터를 CustomStoryCreateScreen 포맷에 맞게 패키징
                   final initialStoryData = {

@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../home_screen.dart';
 
 class StoryReaderScreen extends StatefulWidget {
@@ -121,6 +122,18 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
 
   bool _isSaving = false; // 💡 저장 중복 클릭 방지용 상태 변수
 
+  // 🔗 작업 중 ID(tale_<ms>)로 저장된 그림·메타데이터를 서버 story_id 키(tale_<storyId>_)로 복사
+  Future<void> _linkSketchesToStory(dynamic storyId) async {
+    if (widget.taleId == null || storyId == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final from = 'tale_${widget.taleId!.replaceFirst(RegExp(r'^tale_'), '')}_';
+    final to = 'tale_${storyId}_';
+    for (final key in prefs.getKeys().where((k) => k.startsWith(from)).toList()) {
+      final value = prefs.getString(key);
+      if (value != null) await prefs.setString(to + key.substring(from.length), value);
+    }
+  }
+
   // 📚 백엔드 보관함에 영구 저장 후 홈으로 이동
   Future<void> _saveAndNavigateToLibrary() async {
     if (_isSaving) return;
@@ -157,6 +170,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       );
 
       if (res.statusCode == 200) {
+        await _linkSketchesToStory(jsonDecode(res.body)['story_id']);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
