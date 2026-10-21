@@ -1309,64 +1309,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       return;
     }
 
-    if (_cachedStoryData != null) {
-      final String? action = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Row(
-            children: [
-              Icon(Icons.auto_stories_rounded, color: _purple, size: 26),
-              SizedBox(width: 8),
-              Text('이야기 만들기 선택', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _deep)),
-            ],
-          ),
-          content: const Text(
-            '이전에 만든 멋진 줄거리가 남아있어요!\n어떻게 진행할까요?',
-            style: TextStyle(fontSize: 14, color: Color(0xFF4A4458), height: 1.5),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          actions: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'keep_story'),
-                  icon: const Icon(Icons.brush_rounded, size: 18),
-                  label: const Text('기존 줄거리에 바뀐 그림만 적용할래', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _purple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.pop(ctx, 'new_story'),
-                  icon: const Icon(Icons.refresh_rounded, size: 18, color: _purple),
-                  label: const Text('줄거리도 완전히 새로 만들래', style: TextStyle(color: _purple, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFFD1C4E9)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-
-      if (action == null) return;
-
-      // keep_story: 줄거리·장면 설명은 그대로 두고, 그림이 바뀐 캐릭터가 나오는 페이지만 미리보기에서 다시 그림
-      if (action == 'new_story') {
-        _cachedStoryData = null;
-      }
-    }
+    // 이전 줄거리가 있으면 묻지 않고 그대로 이어감 (그림이 바뀐 캐릭터가 나오는 페이지만 미리보기에서 다시 그림)
 
     _haltAudio();
     if (!mounted) return;

@@ -288,7 +288,15 @@ def _build_page_prompt(
             "- TOP HALF (Wide Establishing Panel): One full-width horizontal panel showing the main situation.\n"
             "- BOTTOM HALF (Split Sequential Panels): Two equal side-by-side square panels (Left and Right) showing sequential reactions and actions.\n"
             f"Narrative Flow: {clean_action_text}\n"
-            "Keep all panels and figures safely inside the borders. Maintain identical character designs and golden auras across all three panels."
+            "Keep all panels and figures safely inside the borders. Maintain identical character designs across all three panels, with golden auras only on declared <ENTITY> sprites."
+        )
+    elif p.layout_type == "two_panel":
+        layout_text = (
+            "Format: A 2-panel story comic layout on a single canvas, separated by one clean thin horizontal border:\n"
+            "- TOP HALF: One full-width horizontal panel showing the first moment.\n"
+            "- BOTTOM HALF: One full-width horizontal panel showing the next moment.\n"
+            f"Narrative Flow: {clean_action_text}\n"
+            "Keep all panels and figures safely inside the borders. Maintain identical character designs across both panels, with golden auras only on declared <ENTITY> sprites."
         )
     else:
         layout_text = f"Scene Action: {clean_action_text}"
@@ -313,7 +321,8 @@ def _build_page_prompt(
         "   - EXPRESSIVE LIVING BEINGS: While keeping their core silhouette and signature colors (e.g., hair tufts, limb shapes, dot eyes) completely consistent, characters can express emotions, bend limbs, run, and interact naturally with the scene.\n\n"
         "2. STRICT TWO-LAYER SEPARATION (CHILD ENTITIES VS STORY PROPS):\n"
         "   - GOLDEN AURA ONLY FOR DECLARED ENTITIES: Only the declared <ENTITY> sprites receive the warm golden aura.\n"
-        "   - STORY-ADDED PROPS ARE ORDINARY WATERCOLOR OBJECTS: Any additional items, bedding, blankets, ropes, bowls, jars, or rocks mentioned in the narrative that are NOT declared <ENTITY> items must be rendered as ordinary background watercolor objects with painterly washes. Absolutely ZERO golden outlines or glowing edges on story-added props.\n\n"
+        "   - STORY-ADDED PROPS ARE ORDINARY WATERCOLOR OBJECTS: Any additional items, bedding, blankets, ropes, bowls, jars, or rocks mentioned in the narrative that are NOT declared <ENTITY> items must be rendered as ordinary background watercolor objects with painterly washes. Absolutely ZERO golden outlines or glowing edges on story-added props.\n"
+        "   - STORY-ADDED SIDE CHARACTERS ARE WATERCOLOR TOO: Any creature, animal, or person in the scene that is NOT a declared <ENTITY> (a side character added by the story) must be painted in the same soft watercolor style as the background world. Absolutely ZERO golden aura, glowing outline, or crayon-sprite look on side characters.\n\n"
         "3. FULL ENTITY PRESENCE (ANTI-DROPPING PROTOCOL):\n"
         "   - Every declared character entity in the active asset list MUST appear visibly on stage as an independent, active participant. Never omit or replace any declared character with mere inanimate props or background marks.\n\n"
         "4. SCENERY & ENVIRONMENT INTEGRATION:\n"
