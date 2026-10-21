@@ -1375,17 +1375,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
       if (action == null) return;
 
-      if (action == 'keep_story') {
-        final updatedStoryData = Map<String, dynamic>.from(_cachedStoryData!);
-        final List updatedPages = List.from(updatedStoryData['pages'] ?? []);
-        for (int i = 0; i < updatedPages.length; i++) {
-          final pageInfo = Map<String, dynamic>.from(updatedPages[i]);
-          pageInfo['prompt'] = '';
-          updatedPages[i] = pageInfo;
-        }
-        updatedStoryData['pages'] = updatedPages;
-        _cachedStoryData = updatedStoryData;
-      } else if (action == 'new_story') {
+      // keep_story: 줄거리·장면 설명은 그대로 두고, 그림이 바뀐 캐릭터가 나오는 페이지만 미리보기에서 다시 그림
+      if (action == 'new_story') {
         _cachedStoryData = null;
       }
     }

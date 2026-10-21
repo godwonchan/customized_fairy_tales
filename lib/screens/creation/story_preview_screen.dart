@@ -54,6 +54,9 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     if (widget.cachedStoryData != null && !isDummyFallback) {
       _storyTitle = widget.cachedStoryData!['title'] ?? '우리가 만든 동화 이야기';
       _storyPages = List<Map<String, dynamic>>.from(widget.cachedStoryData!['pages'] ?? []);
+      // 그림 화면에 다녀오기 전에 그려 둔 이미지 복원 (서명이 같은 페이지만 재사용됨)
+      _pageImages.addAll(Map<int, String>.from(widget.cachedStoryData!['pageImages'] ?? {}));
+      _pageImageSignatures.addAll(Map<int, String>.from(widget.cachedStoryData!['pageImageSignatures'] ?? {}));
       _isGenerating = false;
     } else {
       // 🎯 더미 캐시이거나 처음 진입 시 백엔드 gpt-5.5 호출!
@@ -196,6 +199,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       Navigator.pop(context, {
         'title': _storyTitle,
         'pages': _storyPages,
+        'pageImages': _pageImages,
+        'pageImageSignatures': _pageImageSignatures,
       });
     } else {
       Navigator.pop(context);
@@ -450,13 +455,18 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   }
 
   // 페이지 인덱스별로 생성된 이미지와, 생성 당시의 장면 정보를 보관
-  // (장면 정보가 그대로인 페이지는 다시 그리지 않음)
+  // (장면 정보와 등장 캐릭터 그림이 그대로인 페이지는 다시 그리지 않음)
   final Map<int, String> _pageImages = {};
   final Map<int, String> _pageImageSignatures = {};
 
   String _sceneSignature(int index) {
     final p = _storyPages[index];
-    return jsonEncode([p['prompt'] ?? '', p['layout_type'] ?? 'single', p['characters'] ?? []]);
+    final List characters = p['characters'] ?? [];
+    final drawings = [
+      for (final id in characters)
+        [Object.hashAll(widget.assetPngBytes[id] ?? const <int>[]), widget.aiDelegated[id] == true],
+    ];
+    return jsonEncode([p['prompt'] ?? '', p['layout_type'] ?? 'single', characters, drawings]);
   }
 
   bool _hasImage(int index) =>
