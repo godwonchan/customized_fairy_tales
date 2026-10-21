@@ -649,19 +649,6 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       matchingKeys.addAll(allKeys.where((k) => k.startsWith(p2)));
     }
 
-    // 3차: ID 부분 일치 탐색 (ID가 포함된 모든 sketch_png 키)
-    if (matchingKeys.isEmpty) {
-      matchingKeys.addAll(allKeys.where((k) => k.contains(cleanTarget) && k.contains('_sketch_png_')));
-    }
-
-    // 4차: 최후의 폴백 (저장소에 존재하는 가장 최근 sketch_png 그룹 탐색)
-    if (matchingKeys.isEmpty) {
-      debugPrint('⚠️ [1~3차 탐색 실패] 대상 ID로 키를 찾지 못함. 전체 저장소 폴백 탐색 시도...');
-      final allPngKeys = allKeys.where((k) => k.contains('_sketch_png_')).toList();
-      debugPrint('   -> 저장소 내 전체 그림 키 목록: $allPngKeys');
-      matchingKeys.addAll(allPngKeys);
-    }
-
     debugPrint('📦 [발견된 그림 키 수]: ${matchingKeys.length}개 -> $matchingKeys');
 
     // ── 5. PNG 데이터 디코딩 및 메모리 바인딩 ──
