@@ -31,12 +31,19 @@ def _load_input(input_dir: Path):
     return req, blueprints, hero_name
 
 
-async def _generate(req, blueprints, hero_name):
+async def _generate(req, blueprints, hero_name, dry_run):
+    # 그림 없는 에셋의 디자인 시트는 저장값이 없으므로 실행할 때마다 새로 생성
+    design_sheets = await si.design_undrawn_assets(blueprints, req.asset_descriptions)
+    if dry_run:
+        return design_sheets, [
+            si.PageIllustrationResponse(page_number=p.page_number, image_url="", error="dry-run") for p in req.pages
+        ]
+    print(f"이미지 {len(req.pages)}장을 생성합니다 (모델: {si.IMAGE_MODEL})")
     tasks = [
-        si._generate_single_page(p, blueprints, hero_name, req.asset_descriptions)
+        si._generate_single_page(p, blueprints, hero_name, req.asset_descriptions, design_sheets)
         for p in req.pages
     ]
-    return list(await asyncio.gather(*tasks))
+    return design_sheets, list(await asyncio.gather(*tasks))
 
 
 def _scene_line(prompt_path: Path) -> str:
@@ -114,13 +121,10 @@ def main():
     req, blueprints, hero_name = _load_input(input_dir)
     out_dir = input_dir / args.label
 
-    if args.dry_run:
-        results = [si.PageIllustrationResponse(page_number=p.page_number, image_url="", error="dry-run") for p in req.pages]
-    else:
-        print(f"이미지 {len(req.pages)}장을 생성합니다 (모델: {si.IMAGE_MODEL})")
-        results = asyncio.run(_generate(req, blueprints, hero_name))
+    design_sheets, results = asyncio.run(_generate(req, blueprints, hero_name, args.dry_run))
 
-    si.save_page_outputs(out_dir, req.pages, blueprints, hero_name, req.asset_descriptions, results)
+    si.save_page_outputs(out_dir, req.pages, blueprints, hero_name, req.asset_descriptions, results, design_sheets)
+    (out_dir / "design_sheets.json").write_text(json.dumps(design_sheets, ensure_ascii=False, indent=2), encoding="utf-8")
     html_path = _write_compare_html(input_dir, req, args.label)
     print(f"결과 폴더: {out_dir}")
     print(f"비교 화면: {html_path}")

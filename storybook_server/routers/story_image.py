@@ -199,12 +199,50 @@ async def _extract_sketch_dna(cat_id: str, image_b64: str) -> tuple[str, str]:
         return cat_id, f"A 2D hand-drawn character design for {role_label}"
 
 
+# ✏️ 그림 없이 맡긴 에셋의 디자인 시트를 한 번만 만들어 모든 페이지에 같은 모습으로 쓰이게 함
+async def _design_undrawn_asset(cat_id: str, name: str, desc: str) -> tuple[str, str]:
+    role_label = CATEGORY_LABELS.get(cat_id, cat_id.replace("_", " ").title())
+    prompt_text = (
+        f"Design one concrete look for the '{role_label}' named '{name}' in a children's storybook. "
+        f"The child's description: {desc or 'none'}. "
+        "Write a short English design sheet (3-5 lines, no filler) that fixes its shape, size, "
+        "main colors, and distinctive features, so an illustrator draws it identically on every page."
+    )
+    try:
+        res = await client.chat.completions.create(
+            model=VISION_MODEL,
+            messages=[{"role": "user", "content": prompt_text}],
+            max_completion_tokens=1500,
+        )
+        sheet = res.choices[0].message.content.strip()
+        print(f"✏️ [디자인 시트 생성 완료] {role_label} '{name}':\n{sheet}\n", flush=True)
+        return cat_id, sheet
+    except Exception as e:
+        print(f"⚠️ {role_label} 디자인 시트 생성 오류: {e}", flush=True)
+        return cat_id, ""
+
+
+async def design_undrawn_assets(
+    blueprints_by_id: Dict[str, str],
+    asset_descriptions: Optional[Dict[str, Dict[str, str]]],
+) -> Dict[str, str]:
+    """그림이 없고 이름만 있는 에셋마다 디자인 시트를 생성"""
+    tasks = []
+    for k, info in (asset_descriptions or {}).items():
+        name, desc = _asset_name_and_desc(info)
+        if k in blueprints_by_id or not name:
+            continue
+        tasks.append(_design_undrawn_asset(k, name, desc))
+    return {k: sheet for k, sheet in await asyncio.gather(*tasks) if sheet}
+
+
 # 🎨 2. OpenAI gpt-image-2 전용 2D 스프라이트 융합 및 2계층 일러스트 프롬프트 생성기
 def _build_page_prompt(
     p: PageIllustrationRequest,
     blueprints_by_id: Dict[str, str],
     hero_name: str = "",
     asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
 ) -> str:
     # 그림 없이 이름·특징만 있는 에셋(AI에게 맡긴 캐릭터)의 설명
     described_by_id: Dict[str, str] = {}
@@ -218,6 +256,9 @@ def _build_page_prompt(
             f"- Name: '{name}'\n"
             f"- Child's description: {desc or 'none'}"
         )
+        sheet = (design_sheets_by_id or {}).get(k)
+        if sheet:
+            described_by_id[k] += f"\n- Fixed design sheet (draw exactly this design):\n{sheet}"
 
     active_candidate_ids = p.active_asset_ids
     active_keys = [k for k in active_candidate_ids if k in blueprints_by_id or k in described_by_id]
@@ -290,9 +331,10 @@ async def _generate_single_page(
     blueprints_by_id: Dict[str, str],
     hero_name: str = "",
     asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None,
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
 ) -> PageIllustrationResponse:
     print(f"\n🚀 [{p.page_number}화] 이미지 생성 호출 시작 (요청 모델: {IMAGE_MODEL}, 레이아웃: {p.layout_type})")
-    image_prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions)
+    image_prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions, design_sheets_by_id)
 
     try:
         response = await client.images.generate(
@@ -336,15 +378,16 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
     blueprints_by_id: Dict[str, str] = {cat_id: text for cat_id, text in extracted_dnas}
 
     hero_name, _ = _asset_name_and_desc((req.asset_descriptions or {}).get("hero"))
+    design_sheets_by_id = await design_undrawn_assets(blueprints_by_id, req.asset_descriptions)
 
     page_tasks = [
-        _generate_single_page(p, blueprints_by_id, hero_name, req.asset_descriptions)
+        _generate_single_page(p, blueprints_by_id, hero_name, req.asset_descriptions, design_sheets_by_id)
         for p in req.pages
     ]
     results = await asyncio.gather(*page_tasks)
 
     if os.getenv("PROMPT_EVAL_CAPTURE") == "1":
-        _save_eval_capture(req, blueprints_by_id, hero_name, list(results))
+        _save_eval_capture(req, blueprints_by_id, hero_name, list(results), design_sheets_by_id)
 
     return StoryIllustrationBatchResponse(illustrations=list(results))
 
@@ -360,12 +403,13 @@ def save_page_outputs(
     hero_name: str,
     asset_descriptions: Optional[Dict[str, Dict[str, str]]],
     results: List[PageIllustrationResponse],
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
 ) -> None:
     """페이지별 실제 사용된 프롬프트와 생성 이미지를 out_dir에 저장"""
     out_dir.mkdir(parents=True, exist_ok=True)
     by_page = {r.page_number: r for r in results}
     for p in pages:
-        prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions)
+        prompt = _build_page_prompt(p, blueprints_by_id, hero_name, asset_descriptions, design_sheets_by_id)
         (out_dir / f"page_{p.page_number}_prompt.txt").write_text(prompt, encoding="utf-8")
 
         r = by_page.get(p.page_number)
@@ -384,6 +428,7 @@ def _save_eval_capture(
     blueprints_by_id: Dict[str, str],
     hero_name: str,
     results: List[PageIllustrationResponse],
+    design_sheets_by_id: Optional[Dict[str, str]] = None,
 ) -> None:
     try:
         capture_dir = PROMPT_EVAL_DIR / "inputs" / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -395,7 +440,8 @@ def _save_eval_capture(
             json.dumps(blueprints_by_id, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         save_page_outputs(
-            capture_dir / "before", req.pages, blueprints_by_id, hero_name, req.asset_descriptions, results
+            capture_dir / "before", req.pages, blueprints_by_id, hero_name, req.asset_descriptions, results,
+            design_sheets_by_id,
         )
         print(f"🧪 [프롬프트 비교용 입력 저장] {capture_dir}", flush=True)
     except Exception as e:
