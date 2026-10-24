@@ -477,13 +477,30 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     await _speech.listen(
       localeId: 'ko_KR',
       onResult: (result) {
-        setState(() => _chatInputCtrl.text = result.recognizedWords);
+        // 이미 최종 결과를 처리한 뒤 들어오는 늦은 콜백은 무시한다.
+        if (!_isListening) return;
+
+        final recognized = result.recognizedWords.trim();
+
         if (result.finalResult) {
-          setState(() => _isListening = false);
-          if (result.recognizedWords.trim().isNotEmpty) {
-            _handleInputSubmit(result.recognizedWords);
+          setState(() {
+            _isListening = false;
+            _chatInputCtrl.clear();
+          });
+          _speech.stop();
+
+          if (recognized.isNotEmpty) {
+            _handleInputSubmit(recognized);
           }
+          return;
         }
+
+        setState(() {
+          _chatInputCtrl.text = result.recognizedWords;
+          _chatInputCtrl.selection = TextSelection.collapsed(
+            offset: _chatInputCtrl.text.length,
+          );
+        });
       },
     );
   }
@@ -981,7 +998,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         }
         return '${_j(h, '이랑', '랑')} ${_j(x, '이', '가')} 만나면\n무슨 일이 생길까? 💭';
       default:
-        return '이제 동화를 만들 차례야! 📖\n이야기는 어떻게 끝나면 좋을까?';
+        return '이제 동화를 만들 차례야! 📖\n어떤 내용의 동화를 만들고 싶은지 말해줘!';
     }
   }
 
@@ -1018,12 +1035,12 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         ];
       default:
         return [
-          '다 같이 신나는 축제를 열어',
-          '모두 사이좋은 친구가 돼',
-          '무사히 집으로 돌아와',
-          '깜짝 반전이 일어나',
-          '새로운 모험이 또 시작돼',
-          '${_j(h, '이', '가')} 소원을 이뤄',
+          '${_j(h, '이', '가')} 보물을 찾으러 모험을 떠나',
+          '${_j(h, '이', '가')} 친구를 도와주는 이야기',
+          '${_j(h, '이', '가')} 마법의 숲에서 신기한 일을 겪어',
+          '${_j(h, '이', '가')} 비밀 장소를 발견해',
+          '${_j(h, '이', '가')} 어려운 문제를 용기 있게 해결해',
+          '${_j(h, '이', '가')} 새로운 친구들을 만나는 이야기',
         ];
     }
   }
@@ -1101,7 +1118,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
     _storyNotes[key] = StoryNote(
       slotId: key,
-      about: key == _endingKey ? '결말' : (key == _heroKey ? _heroName : (_meetWith == null ? '만남' : _labelOf(_meetWith!))),
+      about: key == _endingKey ? '이야기 내용' : (key == _heroKey ? _heroName : (_meetWith == null ? '만남' : _labelOf(_meetWith!))),
       question: _pendingStoryQuestion,
       answer: finalAnswer,
       byLumi: byLumi,
@@ -2024,8 +2041,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                     child: TextField(
                       controller: _chatInputCtrl,
                       focusNode: _inputFocusNode,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: _handleInputSubmit,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      minLines: 1,
+                      maxLines: 4,
                       style: const TextStyle(fontSize: 17, color: _ink),
                       decoration: InputDecoration(
                         hintText: hint,
