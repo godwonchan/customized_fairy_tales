@@ -5,3 +5,5 @@ sqlmodel==0.0.38
 uvicorn==0.44.0
 python-multipart
 openai
+PyJWT
+edge-tts

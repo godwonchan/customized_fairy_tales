@@ -9,6 +9,10 @@ import 'tale_reading_screen.dart';
 import 'ai_result_screen.dart';
 import '../services/api_service.dart';
 
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lottie/lottie.dart';
+
 class HighlightRange {
   final int start;
   final int end;
@@ -82,6 +86,13 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   DrawingPath? _currentPath;
   final GlobalKey _sketchKey = GlobalKey();
 
+  // [병규 튜토리얼] 코치마크 타깃 지정을 위한 GlobalKey 3개
+  final GlobalKey _textSelectionKey = GlobalKey();
+  final GlobalKey _canvasKey = GlobalKey();
+  final GlobalKey _previewButtonKey = GlobalKey();
+  TutorialCoachMark? _tutorialCoachMark;
+  List<TargetFocus> _targets = [];
+
   Color _selectedColor = Colors.black;
   double _strokeWidth = 12.0;
   bool _isEraser = false;
@@ -124,6 +135,39 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   void initState() {
     super.initState();
     _initText();
+
+    // [병규 수정 | 2026-09-20] 첫 화면 빌드 및 렌더링이 완전히 끝난 직후 튜토리얼 노출 여부 체크
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+  }
+
+  Future<void> _checkAndShowTutorial({bool force = false}) async {
+    // [추가] 화면 위젯 레이아웃이 100% 안정화될 때까지 300ms 대기
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final bool isTutorialSeen = prefs.getBool('is_scene_tutorial_seen') ?? false;
+
+    // 💡 [수정] true 제거 -> 최초 1회만 노출되도록 조건식 복원
+    if (!isTutorialSeen || force) {
+      _initTutorialTargets();
+      _tutorialCoachMark = TutorialCoachMark(
+        targets: _targets,
+        colorShadow: const Color(0xFF2D3436),
+        textSkip: "건너뛰기",
+        paddingFocus: 8,
+        opacityShadow: 0.8,
+        onFinish: () async {
+          await prefs.setBool('is_scene_tutorial_seen', true);
+        },
+        onSkip: () {
+          prefs.setBool('is_scene_tutorial_seen', true);
+          return true;
+        },
+      )..show(context: context);
+    }
   }
 
   void _initText() {
@@ -579,6 +623,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
 
   Widget _buildScriptPanel(bool isTablet) {
     return Container(
+      key: _textSelectionKey,
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -881,6 +926,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
+                    key: _previewButtonKey, // [추가] 3단계 타깃: 미리보기 액션 버튼
                     onPressed: (_isGenerating || _isApplyingAsync)
                         ? null
                         : _generatePreviewFlow,
@@ -1011,40 +1057,43 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   }
 
   Widget _buildCanvas() {
-    return RepaintBoundary(
-      key: _sketchKey,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          color: Colors.white,
-          child: GestureDetector(
-            onPanStart: (details) {
-              setState(() {
-                _currentPath = DrawingPath(
-                  color: _isEraser ? Colors.white : _selectedColor,
-                  strokeWidth: _isEraser ? 24 : _strokeWidth,
-                  points: [details.localPosition],
-                );
-                _paths.add(_currentPath!);
-              });
-            },
-            onPanUpdate: (details) {
-              setState(() {
-                _currentPath?.points.add(details.localPosition);
-              });
-            },
-            onPanEnd: (_) => _currentPath = null,
-            child: CustomPaint(
-              painter: DrawingPainter(_paths),
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: Colors.transparent,
+    return Container(
+        key: _canvasKey,
+        child: RepaintBoundary(
+          key: _sketchKey,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              color: Colors.white,
+              child: GestureDetector(
+                onPanStart: (details) {
+                  setState(() {
+                    _currentPath = DrawingPath(
+                      color: _isEraser ? Colors.white : _selectedColor,
+                      strokeWidth: _isEraser ? 24 : _strokeWidth,
+                      points: [details.localPosition],
+                    );
+                    _paths.add(_currentPath!);
+                  });
+                },
+                onPanUpdate: (details) {
+                  setState(() {
+                    _currentPath?.points.add(details.localPosition);
+                  });
+                },
+                onPanEnd: (_) => _currentPath = null,
+                child: CustomPaint(
+                  painter: DrawingPainter(_paths),
+                  child: Container(
+                    width: double.infinity,
+                    height: double.infinity,
+                    color: Colors.transparent,
+                  ),
+                ),
               ),
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -1461,6 +1510,223 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+// [병규 튜토리얼] 1단계 위치를 절대 좌표(targetPosition)로 강제 고정
+  void _initTutorialTargets() {
+    final screenSize = MediaQuery.of(context).size;
+    final isTablet = screenSize.width >= 600;
+    final double panelWidth = isTablet ? 300.0 : 240.0;
+    final double leftOffset = panelWidth + 24.0; // 요정이 패널 오른쪽에 서 있을 위치
+
+    _targets = [
+      // 1단계: 텍스트 선택 유도 (왼쪽 패널에 오차 없이 정확히 고정)
+      TargetFocus(
+        identify: "textSelectionTarget",
+        keyTarget: _textSelectionKey,
+        // [핵심] GlobalKey 계산 오류 방지를 위해 왼쪽 패널 크기와 위치를 직접 지정!
+        targetPosition: TargetPosition(
+          Size(panelWidth, screenSize.height - 84), // 왼쪽 패널 크기
+          const Offset(12, 60),                      // 상단 헤더 아래 시작 좌표
+        ),
+        shape: ShapeLightFocus.RRect,
+        radius: 16,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.custom,
+            customPosition: CustomTargetContentPosition(
+              top: 80,
+              left: leftOffset, // 왼쪽 패널 바로 옆 도화지 위치
+            ),
+            builder: (context, controller) {
+              return _buildTutorialBubble(
+                context: context,
+                title: "1단계: 바꿀 내용 고르기",
+                description: "동화 내용 중 바꾸고 싶은 단어나 문장을\n마우스로 꾹 눌러 드래그해 보세요!",
+                fairyOnLeft: true,
+                onNext: () => controller.next(),
+              );
+            },
+          ),
+        ],
+      ),
+
+      // 2단계: 그림 그리기 유도
+      TargetFocus(
+        identify: "canvasTarget",
+        keyTarget: _canvasKey,
+        shape: ShapeLightFocus.RRect,
+        radius: 16,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.custom,
+            customPosition: CustomTargetContentPosition(
+              top: 90,
+              right: 30,
+            ),
+            builder: (context, controller) {
+              return _buildTutorialBubble(
+                context: context,
+                title: "2단계: 새로운 장면 그리기",
+                description: "선택한 내용을 대신할 새로운 그림을\n도화지에 자유롭게 그려보세요!",
+                fairyOnLeft: false,
+                onNext: () => controller.next(),
+              );
+            },
+          ),
+        ],
+      ),
+
+      // 3단계: AI 미리보기 버튼 유도
+      TargetFocus(
+        identify: "previewButtonTarget",
+        keyTarget: _previewButtonKey,
+        shape: ShapeLightFocus.RRect,
+        radius: 14,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildTutorialBubble(
+                context: context,
+                title: "3단계: AI로 확인하기",
+                description: "그림을 다 그렸다면 이 버튼을 눌러\nAI가 바꾼 동화와 그림을 미리 확인해요!",
+                isLast: true,
+                fairyOnLeft: true,
+                onNext: () => controller.next(),
+              );
+            },
+          ),
+        ],
+      ),
+    ];
+  }
+
+  // [병규 튜토리얼] 화면 절반 크기의 요정 캐릭터 + 대형 말풍선 위젯
+  Widget _buildTutorialBubble({
+    required BuildContext context,
+    required String title,
+    required String description,
+    required VoidCallback onNext,
+    bool isLast = false,
+    bool fairyOnLeft = true, // 요정 위치 (좌/우 선택 가능)
+  }) {
+    final screenSize = MediaQuery.of(context).size;
+    final fairyHeight = (screenSize.height * 0.45).clamp(240.0, 420.0); // 화면 높이의 약 45%
+
+    // [병규 수정] Lottie 움직이는 요정 캐릭터 적용
+    Widget fairyCharacter = SizedBox(
+      height: fairyHeight,
+      width: fairyHeight * 0.75,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Lottie.asset(
+              'assets/animations/fairy.json',
+              fit: BoxFit.contain,
+              repeat: true,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7E57C2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              "이야기 요정",
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // 2. 대형 설명 말풍선 카드
+    Widget speechBubble = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: (screenSize.width * 0.4).clamp(260.0, 380.0),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFD1C4E9), width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 16,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF3D2C8D),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF4A4A4A),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                onPressed: onNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7E57C2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+                child: Text(
+                  isLast ? "멋진 동화 만들기!" : "다음으로",
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // 3. 요정과 말풍선 가로 나란히 배치
+    return Material(
+      color: Colors.transparent,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: fairyOnLeft
+            ? [fairyCharacter, const SizedBox(width: 16), speechBubble]
+            : [speechBubble, const SizedBox(width: 16), fairyCharacter],
       ),
     );
   }

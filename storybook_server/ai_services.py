@@ -113,23 +113,25 @@ def interpret_sketch(
     image_bytes: bytes,
     mime_type: str
 ) -> str:
-    client = _get_openai_client()
+    # [병규 수정 | 2026-09-18] OpenAI 401 인증 실패 시 서버 중단 방지 및 로컬 테스트용 Fallback
+    try:
+        client = _get_openai_client()
 
-    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    response = client.responses.create(
-        model=OPENAI_TEXT_MODEL,
-        instructions=(
-            "You are a children's story editing assistant. "
-            "Interpret the user's sketch and return exactly one short Korean sentence only."
-        ),
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"""
+        response = client.responses.create(
+            model=OPENAI_TEXT_MODEL,
+            instructions=(
+                "You are a children's story editing assistant. "
+                "Interpret the user's sketch and return exactly one short Korean sentence only."
+            ),
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"""
 사용자가 동화의 특정 텍스트를 바꾸고 싶어서 낙서를 그렸다.
 
 규칙:
@@ -143,22 +145,26 @@ def interpret_sketch(
 [해당 페이지 내용]
 {page_text}
 """.strip(),
-                    },
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{image_b64}",
-                    },
-                ],
-            }
-        ],
-    )
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:{mime_type};base64,{image_b64}",
+                        },
+                    ],
+                }
+            ],
+        )
 
-    text = getattr(response, "output_text", None)
-    if not text:
-        raise RuntimeError(f"낙서 해석 실패: response={response}")
+        text = getattr(response, "output_text", None)
+        if not text:
+            raise RuntimeError(f"낙서 해석 실패: response={response}")
 
-    return text.strip()
+        return text.strip()
 
+    except Exception as e:
+        print(f"[Mock Fallback] 스케치 해석 API 호출 실패 (401 등): {e}")
+        return f"'{selected_text}'을(를) 멋진 마법으로 바꾸고 싶다"
+    # [병규 수정 끝]
 
 def revise_story_from_confirmed_request(
     original_story: str,
@@ -202,11 +208,13 @@ def revise_pages_from_confirmed_request(
             f"edited_page_number 범위 오류: {edited_page_number}, total_pages={len(page_texts)}"
         )
 
-    pages_block = "\n".join(
-        [f"{idx + 1}. {text}" for idx, text in enumerate(page_texts)]
-    )
+    # [병규 수정 | 2026-09-18] OpenAI 401 인증 실패 시 로컬 테스트용 Fallback
+    try:
+        pages_block = "\n".join(
+            [f"{idx + 1}. {text}" for idx, text in enumerate(page_texts)]
+        )
 
-    prompt = f"""
+        prompt = f"""
 너는 아동용 동화를 페이지 단위로 수정하는 편집자다.
 
 입력된 동화는 총 {len(page_texts)}페이지로 구성되어 있다.
@@ -241,19 +249,32 @@ def revise_pages_from_confirmed_request(
 {pages_block}
 """.strip()
 
-    raw_text = call_text_model(
-        prompt,
-        instructions=(
-            "You are an expert children's story editor. "
-            "Return only a JSON array of Korean page texts. "
-            "Pages before the edited page must remain unchanged. "
-            "Pages after the edited page must be rewritten mainly for narrative continuity. "
-            "Do not include markdown or explanations."
+        raw_text = call_text_model(
+            prompt,
+            instructions=(
+                "You are an expert children's story editor. "
+                "Return only a JSON array of Korean page texts. "
+                "Pages before the edited page must remain unchanged. "
+                "Pages after the edited page must be rewritten mainly for narrative continuity. "
+                "Do not include markdown or explanations."
+            )
         )
-    )
 
-    return _extract_json_list(raw_text, len(page_texts))
+        return _extract_json_list(raw_text, len(page_texts))
 
+    except Exception as e:
+        print(f"[Mock Fallback] 페이지 텍스트 수정 실패 (401 등): {e}")
+        fallback_pages = list(page_texts)
+        target_idx = edited_page_number - 1
+        # 선택된 단어를 변경 요청 내용으로 자연스럽게 교체
+        if selected_text in fallback_pages[target_idx]:
+            fallback_pages[target_idx] = fallback_pages[target_idx].replace(
+                selected_text, f"신비로운 마법 거울"
+            )
+        else:
+            fallback_pages[target_idx] += f" ({confirmed_request})"
+        return fallback_pages
+    # [병규 수정 끝]
 
 # =========================
 # 3. 플롯 재배치 / 본문 생성
@@ -596,77 +617,84 @@ def generate_scene_preview_image(
     reference_images: Optional[List[Dict]] = None,
     style_request: Optional[str] = None,
 ) -> tuple[bytes, str, str]:
-    client = _get_openai_client()
-
-    primary_prompt = build_scene_preview_prompt(
-        story_title=story_title,
-        page_text=page_text,
-        selected_text=selected_text,
-        interpreted_request=interpreted_request,
-        style_request=style_request,
-    )
-
-    fallback_prompt = build_scene_preview_prompt_safe_fallback(
-        story_title=story_title,
-        page_text=page_text,
-        selected_text=selected_text,
-        interpreted_request=interpreted_request,
-        style_request=style_request,
-    )
-
-    temp_paths: List[str] = []
-    opened_files = []
-
-    try:
-        base_path = _bytes_to_temp_file(base_image_bytes, base_image_mime_type)
-        temp_paths.append(base_path)
-        opened_files.append(open(base_path, "rb"))
-
-        if reference_images:
-            for ref in reference_images[:3]:
-                if not ref.get("image_data"):
-                    continue
-                ref_path = _bytes_to_temp_file(ref["image_data"], ref.get("mime_type"))
-                temp_paths.append(ref_path)
-                opened_files.append(open(ref_path, "rb"))
-
+    # [병규 수정 | 2026-09-18] OpenAI 이미지 생성 401 실패 시 원본 이미지를 Fallback으로 반환
         try:
-            result = client.images.edit(
-                model=OPENAI_IMAGE_MODEL,
-                image=opened_files,
-                prompt=primary_prompt,
-                size="1024x1024",
+            client = _get_openai_client()
+
+            primary_prompt = build_scene_preview_prompt(
+                story_title=story_title,
+                page_text=page_text,
+                selected_text=selected_text,
+                interpreted_request=interpreted_request,
+                style_request=style_request,
             )
-            used_prompt = primary_prompt
+
+            fallback_prompt = build_scene_preview_prompt_safe_fallback(
+                story_title=story_title,
+                page_text=page_text,
+                selected_text=selected_text,
+                interpreted_request=interpreted_request,
+                style_request=style_request,
+            )
+
+            temp_paths: List[str] = []
+            opened_files = []
+
+            try:
+                base_path = _bytes_to_temp_file(base_image_bytes, base_image_mime_type)
+                temp_paths.append(base_path)
+                opened_files.append(open(base_path, "rb"))
+
+                if reference_images:
+                    for ref in reference_images[:3]:
+                        if not ref.get("image_data"):
+                            continue
+                        ref_path = _bytes_to_temp_file(ref["image_data"], ref.get("mime_type"))
+                        temp_paths.append(ref_path)
+                        opened_files.append(open(ref_path, "rb"))
+
+                try:
+                    result = client.images.edit(
+                        model=OPENAI_IMAGE_MODEL,
+                        image=opened_files,
+                        prompt=primary_prompt,
+                        size="1024x1024",
+                    )
+                    used_prompt = primary_prompt
+                except Exception as e:
+                    print("Primary image prompt blocked or failed:", repr(e))
+                    result = client.images.edit(
+                        model=OPENAI_IMAGE_MODEL,
+                        image=opened_files,
+                        prompt=fallback_prompt,
+                        size="1024x1024",
+                    )
+                    used_prompt = fallback_prompt
+
+                image_b64 = result.data[0].b64_json
+                if not image_b64:
+                    raise RuntimeError("OpenAI 이미지 응답에 b64_json이 없습니다.")
+
+                image_bytes = base64.b64decode(image_b64)
+                return image_bytes, "image/png", used_prompt
+
+            finally:
+                for f in opened_files:
+                    try:
+                        f.close()
+                    except Exception:
+                        pass
+                for path in temp_paths:
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+
         except Exception as e:
-            print("Primary image prompt blocked or failed:", repr(e))
-            result = client.images.edit(
-                model=OPENAI_IMAGE_MODEL,
-                image=opened_files,
-                prompt=fallback_prompt,
-                size="1024x1024",
-            )
-            used_prompt = fallback_prompt
-
-        image_b64 = result.data[0].b64_json
-        if not image_b64:
-            raise RuntimeError("OpenAI 이미지 응답에 b64_json이 없습니다.")
-
-        image_bytes = base64.b64decode(image_b64)
-        return image_bytes, "image/png", used_prompt
-
-    finally:
-        for f in opened_files:
-            try:
-                f.close()
-            except Exception:
-                pass
-        for path in temp_paths:
-            try:
-                os.remove(path)
-            except Exception:
-                pass
-
+            print(f"[Mock Fallback] 장면 이미지 생성 실패 (401 등): {e}")
+            # 이미지 생성이 실패해도 크래시 없이 원본 장면 이미지를 그대로 프리뷰로 사용
+            return base_image_bytes, (base_image_mime_type or "image/png"), "Mock fallback image prompt"
+        # [병규 수정 끝]
 
 # =========================
 # 6. 플롯 이미지 생성
