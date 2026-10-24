@@ -1,0 +1,31 @@
+{
+  "title": "심청전",
+  "description": "효녀 심청의 이야기",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "imagePath": "assets/book_004_Shimcheong/Shimcheong_01.png",
+      "text": "옛날옛날에 앞을 보지 못하는 심봉사와 딸 심청이 살았어요. 부인은 청이를 낳은 지 이레 만에 세상을 떠나고 맙니다. 그래도 심봉사는 정성껏 청이를 키웠고, 청이는 아버지를 지극히 모시는 효녀로 자라났어요."
+    },
+    {
+      "pageNumber": 2,
+      "imagePath": "assets/book_004_Shimcheon/Shimcheon_02.png",
+      "text": "어느 날, 심 봉사는 스님에게 공양미 삼백 석을 바치면 눈을 뜰 수 있다는 말을 듣고 그렇게 하기로 약속했어요. 하지만 쌀을 마련할 방법이 없었답니다."
+    },
+    {
+      "pageNumber": 3,
+      "imagePath": "assets/book_004_Shimcheon/Shimcheon_03.png",,
+      "text": "사람들은 바다의 신에게 제사를 지내기 위해 처녀를 찾고 있었어요. 심청이는 쌀 삼백 석을 받는 대신 바다에 몸을 바치기로 결심했답니다. 심청이는 아버지에게 쌀을 맡기며 작별 인사를 했어요. 그리고 배를 타고 바다 한가운데로 나아갔어요. 심청이는 아버지의 행복을 빌며 깊은 바닷속으로 몸을 던졌답니다."
+    },
+    {
+      "pageNumber": 4,
+      "imagePath": "assets/book_004_Shimcheon/Shimcheon_04.png",
+      "text": "심청이가 인당수에 몸을 던지자, 그녀의 효심에 감동한 하늘이 용왕에게 심청이를 구하라고 명했어요. 심청이는 용왕이 마련해 준 연꽃배를 타고 다시 세상으로 돌아올 수 있었습니다."
+    },
+    {
+      "pageNumber": 5,
+      "imagePath": "assets/book_004_Shimcheon/Shimcheon_05.png",
+      "text": "심 봉사는 딸을 다시 만난 것이 믿기지 않았어요. 그때 놀라운 일이 일어났답니다. “보인다! 내 눈이 보인다!” 기쁨에 겨운 심 봉사는 눈을 떴고, 심청과 아버지는 오래오래 행복하게 살았답니다."
+    }
+  ]
+}
