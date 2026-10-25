@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../widgets/crayong_widgets.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
 import 'scene_edit_screen.dart';
-import 'settings_screen.dart';
 import '../widgets/story_image_view.dart';
 import 'creation/custom_story_create_screen.dart';
 
@@ -25,8 +26,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
   int _currentGridPage = 0;
   final int _itemsPerPage = 10;
 
-  int get _totalGridPages =>
-      (widget.taleBook.totalPages / _itemsPerPage).ceil();
+  int get _totalGridPages => (widget.taleBook.totalPages / _itemsPerPage).ceil();
 
   List<TalePage> get _currentPageItems {
     final start = _currentGridPage * _itemsPerPage;
@@ -34,180 +34,217 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
     return widget.taleBook.pages.sublist(start, end);
   }
 
+  void _openSceneEdit() {
+    if (_selectedPageIndex == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SceneEditScreen(
+          tale: widget.tale,
+          taleBook: widget.taleBook,
+          selectedPageIndex: _selectedPageIndex!,
+        ),
+      ),
+    );
+  }
+
+  void _openNewStoryWithPictures() {
+    final taleIdStr = widget.tale.storyId != null ? 'tale_${widget.tale.storyId}' : widget.tale.id;
+
+    final initialStoryData = {
+      'tale_id': taleIdStr,
+      'title': widget.tale.title,
+      'pages': widget.taleBook.pages.map((p) => {
+            'page_number': p.pageNumber,
+            'content': p.text,
+            'title': '${p.pageNumber}화',
+            'characters': <String>[],
+          }).toList(),
+    };
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CustomStoryCreateScreen(
+          initialStoryData: initialStoryData,
+          taleId: taleIdStr,
+        ),
+      ),
+    );
+  }
+
+  void _showGuide() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Image.asset(CrayongImages.proud, height: 110)),
+                const SizedBox(height: 12),
+                Center(child: Text('장면 고르는 법', style: AppTextStyles.headingLarge())),
+                const SizedBox(height: 14),
+                for (final hint in const [
+                  '한 번에 한 장면만 고를 수 있어요.',
+                  '고른 장면부터 뒤의 이야기가 새롭게 바뀌어요.',
+                  '마음에 드는 장면은 그대로 두고, 바꾸고 싶은 곳만 골라요.',
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 3),
+                          child: Icon(Icons.star_rounded, size: 18, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(hint, style: AppTextStyles.bodyMedium(color: AppColors.textPrimary))),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('알겠어요!'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width >= 600;
+    final isTablet = MediaQuery.of(context).size.width >= 700;
     return Scaffold(
-      backgroundColor: const Color(0xFFF0EEFF),
-      body: Stack(
-        children: [
-          Positioned(top: -60, right: -60,
-            child: Container(width: 200, height: 200,
-              decoration: BoxDecoration(shape: BoxShape.circle,
-                  color: const Color(0xFF9575CD).withOpacity(0.07)))),
-          Positioned(bottom: -80, left: -40,
-            child: Container(width: 220, height: 220,
-              decoration: BoxDecoration(shape: BoxShape.circle,
-                  color: const Color(0xFFEC407A).withOpacity(0.05)))),
-          SafeArea(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context, isTablet),
-            _buildGuideBox(isTablet),
+            _buildHeader(isTablet),
+            _buildGuideBox(),
             Expanded(child: _buildGrid(isTablet)),
             if (_totalGridPages > 1) _buildPagination(),
-            _buildBottomPreview(isTablet),
+            _buildBottomBar(isTablet),
           ],
         ),
-      ),
-        ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isTablet) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: isTablet ? 24 : 16, vertical: 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xFFF5F0FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+  Widget _buildHeader(bool isTablet) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: const Color(0xFFF8F4FF), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.chevron_left, color: Color(0xFF7E57C2), size: 22),
-            ),
-          ),
+          RoundIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('수정할 페이지 선택',
-                  style: TextStyle(fontSize: isTablet ? 18 : 16, fontWeight: FontWeight.w700, color: const Color(0xFF3D2C8D))),
-              Text('이야기에서 바꾸고 싶은 장면을 하나 선택해주세요.',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-            ],
-          ),
-          const Spacer(),
-          _buildStepIndicator(isTablet),
-          const SizedBox(width: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F4FF),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE0D7F5)),
-            ),
-            child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
-              child: Row(children: const [
-                Icon(Icons.lightbulb_outline, size: 14, color: Color(0xFF7E57C2)),
-                SizedBox(width: 4),
-                Text('선택 가이드', style: TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w500)),
-              ]),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepIndicator(bool isTablet) {
-    final steps = ['동화 읽기', '수정할 페이지 선택', '장면 수정하기'];
-    return Row(
-      children: steps.asMap().entries.map((entry) {
-        final index = entry.key;
-        final label = entry.value;
-        final isDone = index == 0;
-        final isCurrent = index == 1;
-        return Row(
-          children: [
-            Container(
-              width: 24, height: 24,
-              decoration: BoxDecoration(
-                color: isDone || isCurrent ? const Color(0xFF7E57C2) : Colors.grey[300],
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: isDone
-                    ? const Icon(Icons.check, size: 14, color: Colors.white)
-                    : Text('${index + 1}',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                            color: isCurrent ? Colors.white : Colors.grey[500])),
-              ),
-            ),
-            const SizedBox(width: 4),
-            if (isTablet)
-              Text(label,
-                  style: TextStyle(fontSize: 12,
-                      fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                      color: isCurrent ? const Color(0xFF7E57C2) : Colors.grey[400])),
-            if (index < steps.length - 1) ...[
-              const SizedBox(width: 6),
-              Icon(Icons.arrow_forward, size: 14, color: Colors.grey[300]),
-              const SizedBox(width: 6),
-            ],
-          ],
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildGuideBox(bool isTablet) {
-    return Container(
-      margin: EdgeInsets.all(isTablet ? 20 : 14),
-      padding: EdgeInsets.all(isTablet ? 16 : 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFAF8FF), Color(0xFFEDE7F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD8CCFF), width: 1.5),
-        boxShadow: [BoxShadow(color: const Color(0xFF9575CD).withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: isTablet ? 60 : 50, height: isTablet ? 60 : 50,
-            decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.emoji_nature, size: 32, color: Color(0xFF7E57C2)),
-          ),
-          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('한 번에 한 장면만 선택할 수 있어요!',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF7E57C2))),
-                const SizedBox(height: 4),
-                Text('가장 바꾸고 싶은 장면을 하나 골라주세요.\nAI가 그 장면부터 이야기를 새롭게 이어갈 거예요.',
-                    style: TextStyle(fontSize: isTablet ? 13 : 12, color: Colors.grey[600], height: 1.5)),
+                Text('바꾸고 싶은 장면 고르기', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.headingLarge()),
+                Text(widget.tale.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.caption(color: AppColors.textSecondary)),
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F4FF),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE0D7F5)),
+          if (isTablet) ...[
+            _buildStepIndicator(),
+            const SizedBox(width: 12),
+          ],
+          RoundIconButton(icon: Icons.lightbulb_outline_rounded, tooltip: '고르는 법', onTap: _showGuide),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    const steps = ['동화 읽기', '장면 고르기', '장면 바꾸기'];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border, width: 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < steps.length; i++) ...[
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: i == 0
+                    ? AppColors.secondaryDark
+                    : (i == 1 ? AppColors.primary : AppColors.surfaceVariant),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: i == 0
+                    ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+                    : Text(
+                        '${i + 1}',
+                        style: AppTextStyles.labelSmall(
+                          color: i == 1 ? AppColors.onPrimary : AppColors.textHint,
+                        ),
+                      ),
+              ),
             ),
-            child: Row(children: const [
-              Icon(Icons.star, size: 14, color: Color(0xFF7E57C2)),
-              SizedBox(width: 6),
-              Text('선택한 페이지는 보라색 테두리로 표시돼요.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w500)),
-            ]),
+            const SizedBox(width: 5),
+            Text(
+              steps[i],
+              style: i == 1
+                  ? AppTextStyles.headingSmall().copyWith(fontSize: 16, height: 1.1)
+                  : AppTextStyles.labelSmall(color: AppColors.textHint),
+            ),
+            if (i < steps.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textHint),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideBox() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 18, 12),
+      decoration: AppDecorations.sticker(
+        color: AppColors.secondaryLight,
+        shadowColor: const Color(0xFFBFDDA5),
+        radius: 22,
+        depth: 4,
+      ),
+      child: Row(
+        children: [
+          Image.asset(CrayongImages.proud, height: 64),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('바꾸고 싶은 장면을 하나만 골라 줘!', style: AppTextStyles.headingSmall()),
+                Text(
+                  '고른 장면부터 크레용이 이야기를 새롭게 이어 갈게요.',
+                  style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -215,70 +252,32 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
   }
 
   Widget _buildGrid(bool isTablet) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(horizontal: isTablet ? 20 : 14),
-      child: Wrap(
-        spacing: isTablet ? 12 : 8,
-        runSpacing: isTablet ? 12 : 8,
-        children: List.generate(_currentPageItems.length, (index) {
-          final actualIndex = _currentGridPage * _itemsPerPage + index;
-          final page = _currentPageItems[index];
-          final isSelected = _selectedPageIndex == actualIndex;
-          final cardWidth = isSelected ? (isTablet ? 180.0 : 150.0) : (isTablet ? 130.0 : 105.0);
-          final cardHeight = isSelected ? (isTablet ? 170.0 : 140.0) : (isTablet ? 120.0 : 95.0);
-
-          return GestureDetector(
-            onTap: () => setState(() => _selectedPageIndex = actualIndex),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              width: cardWidth,
-              child: Column(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    width: cardWidth, height: cardHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: isSelected ? const Color(0xFF7E57C2) : Colors.transparent, width: 2.5),
-                      boxShadow: [BoxShadow(
-                          color: isSelected ? const Color(0xFF7E57C2).withOpacity(0.3) : Colors.black.withOpacity(0.06),
-                          blurRadius: isSelected ? 14 : 6)],
-                    ),
-                    child: Stack(
-                      children: [
-                        ClipRRect(borderRadius: BorderRadius.circular(10),
-                            child: StoryImageView(imagePath: page.imagePath, fit: BoxFit.cover)),
-                        Positioned(top: 4, left: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(6)),
-                            child: Text('${actualIndex + 1}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D))),
-                          )),
-                        Positioned(top: 4, right: 4,
-                          child: isSelected
-                              ? Container(width: 22, height: 22,
-                                  decoration: const BoxDecoration(color: Color(0xFF7E57C2), shape: BoxShape.circle),
-                                  child: const Icon(Icons.check, size: 14, color: Colors.white))
-                              : const Icon(Icons.favorite_border, size: 16, color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(_getPageDescription(actualIndex),
-                      style: TextStyle(fontSize: isTablet ? 11 : 10,
-                          color: isSelected ? const Color(0xFF7E57C2) : Colors.grey[600],
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400, height: 1.3),
-                      textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
+    final items = _currentPageItems;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1100 ? 5 : (constraints.maxWidth >= 700 ? 4 : 2);
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 18,
+            childAspectRatio: 0.92,
+          ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final actualIndex = _currentGridPage * _itemsPerPage + index;
+            return _PageCard(
+              page: items[index],
+              number: actualIndex + 1,
+              description: _getPageDescription(actualIndex),
+              selected: _selectedPageIndex == actualIndex,
+              frameColor: widget.tale.cardColor,
+              onTap: () => setState(() => _selectedPageIndex = actualIndex),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -286,45 +285,38 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
     final pages = widget.taleBook.pages;
     if (index < pages.length) {
       final text = pages[index].text;
-      return text.length > 15 ? '${text.substring(0, 15)}...' : text;
+      return text.length > 18 ? '${text.substring(0, 18)}...' : text;
     }
     return '${index + 1}페이지';
   }
 
   Widget _buildPagination() {
+    final canPrev = _currentGridPage > 0;
+    final canNext = _currentGridPage < _totalGridPages - 1;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          GestureDetector(
-            onTap: _currentGridPage > 0 ? () => setState(() => _currentGridPage--) : null,
-            child: Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: _currentGridPage > 0 ? Colors.white : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: Icon(Icons.chevron_left, size: 18,
-                  color: _currentGridPage > 0 ? const Color(0xFF7E57C2) : Colors.grey[300]),
+          Opacity(
+            opacity: canPrev ? 1 : 0.4,
+            child: RoundIconButton(
+              icon: Icons.chevron_left_rounded,
+              onTap: () {
+                if (canPrev) setState(() => _currentGridPage--);
+              },
             ),
           ),
-          const SizedBox(width: 12),
-          Text('${_currentGridPage + 1} / $_totalGridPages',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D))),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: _currentGridPage < _totalGridPages - 1 ? () => setState(() => _currentGridPage++) : null,
-            child: Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: _currentGridPage < _totalGridPages - 1 ? Colors.white : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey[200]!),
-              ),
-              child: Icon(Icons.chevron_right, size: 18,
-                  color: _currentGridPage < _totalGridPages - 1 ? const Color(0xFF7E57C2) : Colors.grey[300]),
+          const SizedBox(width: 14),
+          Text('${_currentGridPage + 1} / $_totalGridPages', style: AppTextStyles.headingSmall()),
+          const SizedBox(width: 14),
+          Opacity(
+            opacity: canNext ? 1 : 0.4,
+            child: RoundIconButton(
+              icon: Icons.chevron_right_rounded,
+              onTap: () {
+                if (canNext) setState(() => _currentGridPage++);
+              },
             ),
           ),
         ],
@@ -332,202 +324,281 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
     );
   }
 
-  Widget _buildBottomPreview(bool isTablet) {
+  Widget _buildBottomBar(bool isTablet) {
     final selectedPage = _selectedPageIndex != null ? widget.taleBook.pages[_selectedPageIndex!] : null;
-    return Container(
-      padding: EdgeInsets.all(isTablet ? 20 : 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Colors.white, Color(0xFFF5F0FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+
+    final preview = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: selectedPage != null ? widget.tale.cardColor : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selectedPage != null ? AppColors.primary : AppColors.border,
+              width: selectedPage != null ? 3 : 2,
+            ),
+          ),
+          child: selectedPage != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: StoryImageView(imagePath: selectedPage.imagePath, fit: BoxFit.cover),
+                )
+              : const Icon(Icons.touch_app_rounded, color: AppColors.textHint, size: 26),
         ),
-        border: Border(top: BorderSide(color: const Color(0xFFEDE7F6), width: 1.5)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
-      ),
-      child: Row(
-        children: [
-          Column(
+        const SizedBox(width: 12),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: isTablet ? 280 : 150),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('선택한 페이지 미리보기',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[500])),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(
-                      color: widget.tale.cardColor,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF7E57C2), width: 2),
-                    ),
-                    child: selectedPage != null
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8),
-                            child: StoryImageView(imagePath: selectedPage.imagePath, fit: BoxFit.cover))
-                        : const Icon(Icons.image_outlined, color: Colors.grey, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  if (selectedPage != null)
-                    SizedBox(
-                      width: isTablet ? 200 : 140,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_getPageDescription(_selectedPageIndex!),
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D)),
-                              maxLines: 2),
-                          const SizedBox(height: 2),
-                          Text(selectedPage.text.length > 30 ? '${selectedPage.text.substring(0, 30)}...' : selectedPage.text,
-                              style: TextStyle(fontSize: 11, color: Colors.grey[500]), maxLines: 1),
-                        ],
-                      ),
-                    )
-                  else
-                    Text('페이지를 선택해주세요', style: TextStyle(fontSize: 13, color: Colors.grey[400])),
-                ],
+              Text(
+                selectedPage != null ? '${_selectedPageIndex! + 1}번 장면을 골랐어요' : '아직 고른 장면이 없어요',
+                style: AppTextStyles.headingSmall(),
+              ),
+              Text(
+                selectedPage != null ? selectedPage.text : '위에서 바꾸고 싶은 장면을 눌러 봐요.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption(color: AppColors.textSecondary),
               ),
             ],
           ),
-          const SizedBox(width: 16),
-          if (isTablet)
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: const Color(0xFFF8F4FF), borderRadius: BorderRadius.circular(12)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: const [
-                      Icon(Icons.lightbulb_outline, size: 14, color: Color(0xFF7E57C2)),
-                      SizedBox(width: 4),
-                      Text('기억해주세요!', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7E57C2))),
-                    ]),
-                    const SizedBox(height: 6),
-                    ...['한 번에 한 페이지(한 장면)만 선택할 수 있어요.', '선택한 장면 이후의 이야기가 새롭게 바뀌어요.', '원하지 않는 부분만 골라 바꿀 수 있어요!']
-                        .map((hint) => Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Row(children: [
-                                const Text('• ', style: TextStyle(fontSize: 11, color: Color(0xFF7E57C2))),
-                                Text(hint, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                              ]),
-                            )),
-                  ],
-                ),
-              ),
+        ),
+      ],
+    );
+
+    final buttons = Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      alignment: WrapAlignment.end,
+      children: [
+        _StickerAction(
+          label: '이 그림들로 새 동화 만들기',
+          icon: Icons.auto_stories_rounded,
+          color: AppColors.surface,
+          shadowColor: AppColors.border,
+          textColor: AppColors.textPrimary,
+          bordered: true,
+          onTap: _openNewStoryWithPictures,
+        ),
+        _StickerAction(
+          label: '이 장면 바꾸기',
+          icon: Icons.arrow_forward_rounded,
+          iconAfter: true,
+          color: _selectedPageIndex != null ? AppColors.primary : AppColors.surfaceVariant,
+          shadowColor: _selectedPageIndex != null ? AppColors.primaryDark : AppColors.border,
+          textColor: _selectedPageIndex != null ? AppColors.onPrimary : AppColors.textHint,
+          onTap: _selectedPageIndex != null ? _openSceneEdit : null,
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border, width: 2)),
+      ),
+      child: isTablet
+          ? Row(
+              children: [
+                preview,
+                const SizedBox(width: 16),
+                Expanded(child: Align(alignment: Alignment.centerRight, child: buttons)),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                preview,
+                const SizedBox(height: 12),
+                buttons,
+              ],
             ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // 🌟 1. [신규 추가] 기존 동화 대본을 들고 새 창작 팔레트로 분기하는 버튼
-              GestureDetector(
-                onTap: () {
-                  // 👈 서버 story_id 기반 ID (저장 시 그림 키와 동일한 규칙: tale_<storyId>)
-                  final taleIdStr = widget.tale.storyId != null ? 'tale_${widget.tale.storyId}' : widget.tale.id;
+    );
+  }
+}
 
-                  // 기존 4화 대본 데이터를 CustomStoryCreateScreen 포맷에 맞게 패키징
-                  final initialStoryData = {
-                    'tale_id': taleIdStr, // 👈 대본 내부에도 동화 ID 보관
-                    'title': widget.tale.title,
-                    'pages': widget.taleBook.pages.map((p) => {
-                      'page_number': p.pageNumber,
-                      'content': p.text,
-                      'title': '${p.pageNumber}화',
-                      'characters': <String>[],
-                    }).toList(),
-                  };
+class _PageCard extends StatelessWidget {
+  final TalePage page;
+  final int number;
+  final String description;
+  final bool selected;
+  final Color frameColor;
+  final VoidCallback onTap;
 
-                  // 새로운 동화 창작 팔레트 화면으로 라우팅
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CustomStoryCreateScreen(
-                        initialStoryData: initialStoryData,
-                        taleId: taleIdStr, // 👈 [핵심] 해당 동화의 ID를 명시적으로 전달!
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF7E57C2), width: 1.8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF7E57C2).withOpacity(0.12),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+  const _PageCard({
+    required this.page,
+    required this.number,
+    required this.description,
+    required this.selected,
+    required this.frameColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          scale: selected ? 1.05 : 1.0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primaryLight : AppColors.surface,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
+                width: selected ? 3 : 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: selected ? AppColors.primaryDark : AppColors.border,
+                  blurRadius: 0,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
                     children: [
-                      const Icon(Icons.auto_stories, size: 16, color: Color(0xFF7E57C2)),
-                      const SizedBox(width: 8),
-                      Text(
-                        '이 그림들로 새로운 동화 만들기',
-                        style: TextStyle(
-                          fontSize: isTablet ? 13 : 12,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF7E57C2),
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: frameColor,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: StoryImageView(imagePath: page.imagePath, fit: BoxFit.cover),
+                          ),
                         ),
                       ),
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(color: AppColors.surface, shape: BoxShape.circle),
+                          child: Center(
+                            child: Text('$number', style: AppTextStyles.labelMedium(color: AppColors.textPrimary)),
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: AppDecorations.sticker(
+                              color: AppColors.primary,
+                              shadowColor: AppColors.primaryDark,
+                              radius: 15,
+                              depth: 2,
+                            ),
+                            child: const Icon(Icons.check_rounded, size: 20, color: AppColors.onPrimary),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-
-              // 2. [기존 유지] 단일 특정 페이지 부분 수정 버튼
-              GestureDetector(
-                onTap: _selectedPageIndex != null
-                    ? () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => SceneEditScreen(
-                      tale: widget.tale,
-                      taleBook: widget.taleBook,
-                      selectedPageIndex: _selectedPageIndex!,
-                    )))
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  decoration: BoxDecoration(
-                    gradient: _selectedPageIndex != null
-                        ? const LinearGradient(colors: [Color(0xFF9575CD), Color(0xFF7E57C2)])
-                        : null,
-                    color: _selectedPageIndex == null ? Colors.grey[200] : null,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: _selectedPageIndex != null ? [
-                      BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 14, offset: const Offset(0, 5)),
-                    ] : [],
-                  ),
-                  child: Row(children: [
-                    Text('이 장면을 선택하고 수정하기로 이동',
-                        style: TextStyle(fontSize: isTablet ? 14 : 13, fontWeight: FontWeight.w600,
-                            color: _selectedPageIndex != null ? Colors.white : Colors.grey[400])),
-                    const SizedBox(width: 8),
-                    Icon(Icons.arrow_forward, size: 16,
-                        color: _selectedPageIndex != null ? Colors.white : Colors.grey[400]),
-                  ]),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.caption(
+                    color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+                  ).copyWith(height: 1.35),
                 ),
-              ),
-              const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-              // 3. [기존 유지] 뒤로가기 버튼
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Row(children: const [
-                  Icon(Icons.arrow_back, size: 14, color: Color(0xFF7E57C2)),
-                  SizedBox(width: 4),
-                  Text('이전 단계로 돌아가기', style: TextStyle(fontSize: 13, color: Color(0xFF7E57C2))),
-                ]),
-              ),
+class _StickerAction extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool iconAfter;
+  final Color color;
+  final Color shadowColor;
+  final Color textColor;
+  final bool bordered;
+  final VoidCallback? onTap;
+
+  const _StickerAction({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.shadowColor,
+    required this.textColor,
+    required this.onTap,
+    this.iconAfter = false,
+    this.bordered = false,
+  });
+
+  @override
+  State<_StickerAction> createState() => _StickerActionState();
+}
+
+class _StickerActionState extends State<_StickerAction> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const depth = 4.0;
+    final enabled = widget.onTap != null;
+    final down = _pressed && enabled;
+    final icon = Icon(widget.icon, size: 20, color: widget.textColor);
+
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          transform: Matrix4.translationValues(0, down ? depth : 0, 0),
+          decoration: BoxDecoration(
+            color: widget.color,
+            borderRadius: BorderRadius.circular(20),
+            border: widget.bordered ? Border.all(color: AppColors.border, width: 2) : null,
+            boxShadow: [
+              BoxShadow(color: widget.shadowColor, blurRadius: 0, offset: Offset(0, down ? 0 : depth)),
             ],
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!widget.iconAfter) ...[icon, const SizedBox(width: 8)],
+              Text(widget.label, style: AppTextStyles.button(color: widget.textColor)),
+              if (widget.iconAfter) ...[const SizedBox(width: 8), icon],
+            ],
+          ),
+        ),
       ),
     );
   }

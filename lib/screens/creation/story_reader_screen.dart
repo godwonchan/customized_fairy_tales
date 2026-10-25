@@ -1,25 +1,28 @@
-// lib/screens/creation/story_reader_screen.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/crayong_widgets.dart';
 import '../home_screen.dart';
 
 class StoryReaderScreen extends StatefulWidget {
   final String title;
   final List<Map<String, dynamic>> pages;
   final Map<String, Uint8List?> assetPngBytes;
-  final String? taleId; // 👈 [추가!] 동화 고유 식별자 (PK)
+  final String? taleId;
 
   const StoryReaderScreen({
     super.key,
     required this.title,
     required this.pages,
     required this.assetPngBytes,
-    this.taleId, // 👈 [추가!] 생성자에서 선택 인자로 수신
+    this.taleId,
   });
 
   @override
@@ -32,9 +35,11 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
   final PageController _pageController = PageController();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final Map<String, Uint8List> _ttsCache = {};
+  StreamSubscription<void>? _completeSub;
 
   int _currentPageIndex = 0;
   bool _isPlayingVoice = false;
+  bool _isSaving = false;
 
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
@@ -47,11 +52,14 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
 
-    _bounceAnimation = Tween<double>(begin: -8.0, end: 4.0).animate(
+    _bounceAnimation = Tween<double>(begin: -6.0, end: 4.0).animate(
       CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
     );
 
-    // 첫 페이지 진입 시 자동 구연동화 읽기
+    _completeSub = _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _isPlayingVoice = false);
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.pages.isNotEmpty) {
         _readCurrentPage(widget.pages[0]['content']);
@@ -61,16 +69,18 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
 
   @override
   void dispose() {
+    _completeSub?.cancel();
     _pageController.dispose();
     _audioPlayer.dispose();
     _bounceController.dispose();
     super.dispose();
   }
 
-  // 🔊 루미 목소리 구연동화 낭독
-  Future<void> _readCurrentPage(String text) async {
+  Future<void> _readCurrentPage(String? text) async {
+    if (text == null || text.trim().isEmpty) return;
     try {
       await _audioPlayer.stop();
+      if (!mounted) return;
       setState(() => _isPlayingVoice = true);
 
       if (_ttsCache.containsKey(text)) {
@@ -89,40 +99,55 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
             final bytes = base64Decode(audioB64);
             _ttsCache[text] = bytes;
             await _audioPlayer.play(BytesSource(bytes));
+          } else if (mounted) {
+            setState(() => _isPlayingVoice = false);
           }
+        } else if (mounted) {
+          setState(() => _isPlayingVoice = false);
         }
       }
-
-      _audioPlayer.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _isPlayingVoice = false);
-      });
     } catch (e) {
       debugPrint('구연동화 재생 오류: $e');
       if (mounted) setState(() => _isPlayingVoice = false);
     }
   }
 
+  void _toggleVoice() {
+    if (_isPlayingVoice) {
+      _audioPlayer.stop();
+      setState(() => _isPlayingVoice = false);
+    } else {
+      _readCurrentPage(widget.pages[_currentPageIndex]['content']);
+    }
+  }
+
   void _goToPreviousPage() {
     if (_currentPageIndex > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+      _pageController.previousPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
     }
   }
 
   void _goToNextPage() {
     if (_currentPageIndex < widget.pages.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+      _pageController.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
     }
   }
 
-  bool _isSaving = false; // 💡 저장 중복 클릭 방지용 상태 변수
+  void _showMessage(String text, {String image = CrayongImages.wink}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Image.asset(image, width: 30, height: 30),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: AppTextStyles.labelLarge(color: Colors.white))),
+          ],
+        ),
+      ),
+    );
+  }
 
-  // 🔗 작업 중 ID(tale_<ms>)로 저장된 그림·메타데이터를 서버 story_id 키(tale_<storyId>_)로 복사
   Future<void> _linkSketchesToStory(dynamic storyId) async {
     if (widget.taleId == null || storyId == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -134,7 +159,6 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
     }
   }
 
-  // 📚 백엔드 보관함에 영구 저장 후 홈으로 이동
   Future<void> _saveAndNavigateToLibrary() async {
     if (_isSaving) return;
 
@@ -142,7 +166,6 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
     await _audioPlayer.stop();
 
     try {
-      // 1. 백엔드 규격에 맞게 페이지 목록 조립
       final List<Map<String, dynamic>> pagesPayload = [];
       for (int i = 0; i < widget.pages.length; i++) {
         final p = widget.pages[i];
@@ -155,14 +178,13 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       }
 
       final body = {
-        if (widget.taleId != null) 'id': widget.taleId,        // 👈 백엔드가 id 필드를 받을 때
-        if (widget.taleId != null) 'tale_id': widget.taleId,   // 👈 백엔드가 tale_id 필드를 받을 때
+        if (widget.taleId != null) 'id': widget.taleId,
+        if (widget.taleId != null) 'tale_id': widget.taleId,
         'title': widget.title,
         'mood': '신나는 모험',
         'pages': pagesPayload,
       };
 
-      // 2. 백엔드 저장 API 호출
       final res = await http.post(
         Uri.parse('$_baseUrl/api/stories'),
         headers: {'Content-Type': 'application/json'},
@@ -172,19 +194,12 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       if (res.statusCode == 200) {
         await _linkSketchesToStory(jsonDecode(res.body)['story_id']);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✨ 동화책이 보관함에 안전하게 저장되었어!'),
-            backgroundColor: Color(0xFF4CAF50),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showMessage('나의 책장에 꽂아 뒀어요!', image: CrayongImages.celebrate);
 
-        // 3. 서재(홈) 화면으로 이동
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const AppShell()),
-              (route) => false,
+          MaterialPageRoute(builder: (context) => const AppShell(initialIndex: 2, initialMyStoriesTab: 1)),
+          (route) => false,
         );
       } else {
         throw Exception('서버 응답 오류: ${res.statusCode}');
@@ -193,11 +208,9 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       debugPrint('보관함 저장 실패: $e');
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('저장 중 문제가 생겼어: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+        _showMessage(
+          kDebugMode ? '저장 중 문제가 생겼어요: $e' : '책장에 못 넣었어요. 다시 해 볼래요?',
+          image: CrayongImages.surprised,
         );
       }
     }
@@ -209,48 +222,15 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
     final bool hasNext = _currentPageIndex < widget.pages.length - 1;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1433),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () {
-            _audioPlayer.stop();
-            Navigator.pop(context);
-          },
-        ),
-        title: Text(
-          widget.title,
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isPlayingVoice ? Icons.volume_up_rounded : Icons.volume_mute_rounded,
-              color: _isPlayingVoice ? const Color(0xFFCE93D8) : Colors.white70,
-              size: 26,
-            ),
-            onPressed: () {
-              if (_isPlayingVoice) {
-                _audioPlayer.stop();
-                setState(() => _isPlayingVoice = false);
-              } else {
-                _readCurrentPage(widget.pages[_currentPageIndex]['content']);
-              }
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                // ── 📖 좌우 2분할 펼친 면 동화책 PageView ──
-                Expanded(
-                  child: ScrollConfiguration(
+            _buildHeader(),
+            Expanded(
+              child: Stack(
+                children: [
+                  ScrollConfiguration(
                     behavior: ScrollConfiguration.of(context).copyWith(
                       dragDevices: {
                         PointerDeviceKind.touch,
@@ -265,249 +245,245 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
                         setState(() => _currentPageIndex = idx);
                         _readCurrentPage(widget.pages[idx]['content']);
                       },
-                      itemBuilder: (context, index) {
-                        final page = widget.pages[index];
-
-                        return Center(
-                          child: ConstrainedBox(
-                            // 💡 양장본 동화책 비율 (가로 최대 1060px, 세로 최대 580px)
-                            constraints: const BoxConstraints(maxWidth: 1060, maxHeight: 580),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(28),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.4),
-                                      blurRadius: 24,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(28),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      // 🎨 [왼쪽 면]: 1:1 정사각 그림 영역 (잘림 0% 보장!)
-                                      Expanded(
-                                        flex: 11,
-                                        child: Container(
-                                          color: const Color(0xFFF9F7FC),
-                                          child: Center(
-                                            child: AspectRatio(
-                                              aspectRatio: 1.0, // 👈 1:1 정사각 캔버스 비율 고정
-                                              child: Stack(
-                                                fit: StackFit.expand,
-                                                children: [
-                                                  _buildBackgroundImage(page['imageUrl']),
-                                                  // 페이지 뱃지
-                                                  Positioned(
-                                                    top: 18,
-                                                    left: 18,
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.black.withOpacity(0.65),
-                                                        borderRadius: BorderRadius.circular(20),
-                                                      ),
-                                                      child: Text(
-                                                        page['page'] ?? '',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 13,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      // 📖 [가운데 책 접힘선]: 실제 종이책 느낌의 은은한 음영
-                                      Container(
-                                        width: 1.5,
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              Colors.black.withOpacity(0.04),
-                                              Colors.black.withOpacity(0.18),
-                                              Colors.black.withOpacity(0.04),
-                                            ],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                          ),
-                                        ),
-                                      ),
-
-                                      // 📜 [오른쪽 면]: 시원하고 여유로운 동화 글 영역 (잘림 0%)
-                                      Expanded(
-                                        flex: 10,
-                                        child: Container(
-                                          color: const Color(0xFFFCFCFD),
-                                          padding: const EdgeInsets.fromLTRB(36, 40, 36, 32),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              // 소제목
-                                              Text(
-                                                page['title'] ?? '',
-                                                style: const TextStyle(
-                                                  fontSize: 22,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Color(0xFF3D2C8D),
-                                                  letterSpacing: -0.5,
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 16),
-
-                                              // 본문 (글씨 확대 & 넉넉한 줄간격)
-                                              Expanded(
-                                                child: SingleChildScrollView(
-                                                  physics: const BouncingScrollPhysics(),
-                                                  child: Text(
-                                                    page['content'] ?? '',
-                                                    style: const TextStyle(
-                                                      fontSize: 18.5,
-                                                      color: Color(0xFF2C2440),
-                                                      height: 1.7,
-                                                      fontWeight: FontWeight.w600,
-                                                      letterSpacing: -0.3,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
+                      itemBuilder: (context, index) => _buildBookSpread(widget.pages[index]),
                     ),
                   ),
-                ),
-
-                // ── 하단 컨트롤 바 (이전 / 인디케이터 / 다음 or 보관함) ──
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  child: Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: hasPrev ? _goToPreviousPage : null,
-                        icon: const Icon(Icons.arrow_back_ios_new, size: 14),
-                        label: const Text('이전', style: TextStyle(fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white24,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.white10,
-                          disabledForegroundColor: Colors.white30,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          elevation: 0,
-                        ),
+                  if (hasPrev)
+                    Positioned(
+                      left: 16,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _buildBigNavButton(icon: Icons.chevron_left_rounded, tooltip: '이전 쪽', onTap: _goToPreviousPage),
                       ),
-                      const Spacer(),
-
-                      // 중앙 인디케이터 점(Dot)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(widget.pages.length, (i) {
-                          final isSelected = _currentPageIndex == i;
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 250),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: isSelected ? 22 : 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFFCE93D8) : Colors.white24,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          );
-                        }),
+                    ),
+                  if (hasNext)
+                    Positioned(
+                      right: 16,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _buildBigNavButton(icon: Icons.chevron_right_rounded, tooltip: '다음 쪽', onTap: _goToNextPage),
                       ),
-                      const Spacer(),
-
-                      if (hasNext)
-                        ElevatedButton.icon(
-                          onPressed: _goToNextPage,
-                          icon: const Text('다음', style: TextStyle(fontWeight: FontWeight.bold)),
-                          label: const Icon(Icons.arrow_forward_ios, size: 14),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7E57C2),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            elevation: 4,
-                          ),
-                        )
-                      else
-                        ElevatedButton.icon(
-                          onPressed: _isSaving ? null : _saveAndNavigateToLibrary,
-                          icon: _isSaving
-                              ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                              : const Icon(Icons.check_circle_outline, size: 16),
-                          label: Text(
-                            _isSaving ? '보관함에 저장 중...' : '보관함으로',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4CAF50),
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.white24,
-                            disabledForegroundColor: Colors.white54,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            elevation: 4,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                ],
+              ),
             ),
-
-            // ── 화면 양옆 플로팅 화살표 버튼 ──
-            if (hasPrev)
-              Positioned(
-                left: 12,
-                top: MediaQuery.of(context).size.height * 0.42,
-                child: _buildBigNavButton(
-                  icon: Icons.chevron_left_rounded,
-                  tooltip: '이전 쪽',
-                  onTap: _goToPreviousPage,
-                ),
-              ),
-
-            if (hasNext)
-              Positioned(
-                right: 12,
-                top: MediaQuery.of(context).size.height * 0.42,
-                child: _buildBigNavButton(
-                  icon: Icons.chevron_right_rounded,
-                  tooltip: '다음 쪽',
-                  onTap: _goToNextPage,
-                ),
-              ),
+            _buildBottomBar(hasPrev, hasNext),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+      child: Row(
+        children: [
+          RoundIconButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: () {
+              _audioPlayer.stop();
+              Navigator.pop(context);
+            },
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.headingLarge()),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: _toggleVoice,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 48,
+                padding: const EdgeInsets.fromLTRB(6, 4, 16, 4),
+                decoration: BoxDecoration(
+                  color: _isPlayingVoice ? AppColors.secondaryLight : AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: _isPlayingVoice ? AppColors.secondary : AppColors.border, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isPlayingVoice ? const Color(0xFFBFDDA5) : AppColors.border,
+                      blurRadius: 0,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _bounceAnimation,
+                      builder: (_, child) => Transform.translate(
+                        offset: Offset(0, _isPlayingVoice ? _bounceAnimation.value * 0.5 : 0),
+                        child: child,
+                      ),
+                      child: Image.asset(CrayongImages.wink, height: 38),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      _isPlayingVoice ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                      size: 20,
+                      color: _isPlayingVoice ? AppColors.secondaryDark : AppColors.textHint,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _isPlayingVoice ? '크레용이 읽는 중' : '읽어 줘',
+                      style: AppTextStyles.headingSmall(
+                        color: _isPlayingVoice ? const Color(0xFF3E6F2E) : AppColors.textSecondary,
+                      ).copyWith(fontSize: 16, height: 1.1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookSpread(Map<String, dynamic> page) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1060, maxHeight: 600),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(84, 10, 84, 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: AppColors.border, width: 2),
+              boxShadow: const [BoxShadow(color: AppColors.border, blurRadius: 0, offset: Offset(0, 8))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    flex: 11,
+                    child: Container(
+                      color: AppColors.surfaceVariant,
+                      padding: const EdgeInsets.all(14),
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: 1.0,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _buildBackgroundImage(page['imageUrl']),
+                                if ((page['page'] ?? '').toString().isNotEmpty)
+                                  Positioned(
+                                    top: 14,
+                                    left: 14,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        page['page'].toString(),
+                                        style: AppTextStyles.labelMedium(color: AppColors.primaryText),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(width: 2, color: AppColors.border),
+                  Expanded(
+                    flex: 10,
+                    child: Container(
+                      color: AppColors.surface,
+                      padding: const EdgeInsets.fromLTRB(32, 34, 32, 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            page['title'] ?? '',
+                            style: AppTextStyles.headingLarge(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: Text(page['content'] ?? '', style: AppTextStyles.storyBody(fontSize: 20)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(bool hasPrev, bool hasNext) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border, width: 2)),
+      ),
+      child: Row(
+        children: [
+          Opacity(
+            opacity: hasPrev ? 1 : 0.4,
+            child: RoundIconButton(icon: Icons.chevron_left_rounded, tooltip: '이전 쪽', onTap: _goToPreviousPage),
+          ),
+          const Spacer(),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(widget.pages.length, (i) {
+              final isSelected = _currentPageIndex == i;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: isSelected ? 24 : 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary : AppColors.border,
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              );
+            }),
+          ),
+          const Spacer(),
+          if (hasNext)
+            _StickerButton(
+              label: '다음 쪽',
+              icon: Icons.arrow_forward_rounded,
+              iconAfter: true,
+              onTap: _goToNextPage,
+            )
+          else
+            _StickerButton(
+              label: _isSaving ? '책장에 넣는 중...' : '나의 책장에 넣기',
+              icon: Icons.bookmark_add_rounded,
+              loading: _isSaving,
+              green: true,
+              onTap: _isSaving ? null : _saveAndNavigateToLibrary,
+            ),
+        ],
       ),
     );
   }
@@ -519,41 +495,34 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
   }) {
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(30),
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
           child: Container(
-            width: 54,
-            height: 54,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9575CD), Color(0xFF5E35B1)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.surface,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+              border: Border.all(color: AppColors.border, width: 2),
+              boxShadow: const [BoxShadow(color: AppColors.border, blurRadius: 0, offset: Offset(0, 4))],
             ),
-            child: Icon(icon, color: Colors.white, size: 38),
+            child: Icon(icon, color: AppColors.textPrimary, size: 36),
           ),
         ),
       ),
     );
   }
 
-  // 💡 1:1 이미지가 온전하게 보이도록 fit 설정
   Widget _buildBackgroundImage(String? imageUrl) {
+    Widget placeholder() => Container(
+          color: AppColors.surfaceVariant,
+          child: Center(child: Image.asset(CrayongImages.drawing, height: 120)),
+        );
+
     if (imageUrl == null || imageUrl.isEmpty) {
-      return Container(color: const Color(0xFFEDE7F6));
+      return placeholder();
     }
 
     if (imageUrl.startsWith('data:image') || !imageUrl.startsWith('http')) {
@@ -564,7 +533,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
           bytes,
           fit: BoxFit.contain,
           alignment: Alignment.center,
-          errorBuilder: (_, __, ___) => Container(color: const Color(0xFFEDE7F6)),
+          errorBuilder: (_, __, ___) => placeholder(),
         );
       } catch (e) {
         debugPrint('Base64 파싱 오류: $e');
@@ -577,11 +546,71 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
       alignment: Alignment.center,
       loadingBuilder: (ctx, child, progress) {
         if (progress == null) return child;
-        return const Center(child: CircularProgressIndicator(color: Color(0xFF7E57C2)));
+        return const Center(child: CircularProgressIndicator(color: AppColors.primaryDark));
       },
-      errorBuilder: (ctx, err, stack) => Container(
-        color: const Color(0xFFEDE7F6),
-        child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+      errorBuilder: (ctx, err, stack) => placeholder(),
+    );
+  }
+}
+
+class _StickerButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool iconAfter;
+  final bool loading;
+  final bool green;
+  final VoidCallback? onTap;
+
+  const _StickerButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.iconAfter = false,
+    this.loading = false,
+    this.green = false,
+  });
+
+  @override
+  State<_StickerButton> createState() => _StickerButtonState();
+}
+
+class _StickerButtonState extends State<_StickerButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const depth = 4.0;
+    final enabled = widget.onTap != null;
+    final down = _pressed && enabled;
+    final color = widget.green ? AppColors.secondaryDark : AppColors.primary;
+    final shadow = widget.green ? const Color(0xFF457A36) : AppColors.primaryDark;
+    final textColor = widget.green ? Colors.white : AppColors.onPrimary;
+    final iconWidget = widget.loading
+        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5, color: textColor))
+        : Icon(widget.icon, size: 20, color: textColor);
+
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          transform: Matrix4.translationValues(0, down ? depth : 0, 0),
+          decoration: AppDecorations.sticker(color: color, shadowColor: shadow, radius: 20, depth: down ? 0 : depth),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!widget.iconAfter) ...[iconWidget, const SizedBox(width: 8)],
+              Text(widget.label, style: AppTextStyles.button(color: textColor)),
+              if (widget.iconAfter) ...[const SizedBox(width: 8), iconWidget],
+            ],
+          ),
+        ),
       ),
     );
   }

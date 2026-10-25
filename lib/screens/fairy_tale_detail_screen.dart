@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/favorites_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/crayong_widgets.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
 import '../widgets/story_image_view.dart';
@@ -16,15 +20,13 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
-  late bool _isFavorite;
 
   @override
   void initState() {
     super.initState();
-    _isFavorite = widget.tale.isFavorite;
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic));
     _animController.forward();
   }
@@ -35,159 +37,106 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     super.dispose();
   }
 
+  void _toggleFavorite() {
+    final provider = context.read<FavoritesProvider>();
+    final willAdd = !provider.isFavorite(widget.tale);
+    provider.toggleFavorite(widget.tale);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 1500),
+        content: Row(
+          children: [
+            Image.asset(willAdd ? CrayongImages.celebrate : CrayongImages.lying, width: 30, height: 30),
+            const SizedBox(width: 10),
+            Text(
+              willAdd ? '좋아하는 이야기에 넣었어요!' : '좋아하는 이야기에서 뺐어요.',
+              style: AppTextStyles.labelLarge(color: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openReading() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: widget.tale, initialPage: 0)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width >= 600;
     final tale = widget.tale;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
+      backgroundColor: AppColors.background,
       body: Stack(
         children: [
           Positioned(
-            top: -60, right: -60,
+            top: -80,
+            right: -60,
             child: Container(
-              width: 200, height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF9575CD).withOpacity(0.08),
-              ),
+              width: 240,
+              height: 240,
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x55FFE9A8)),
             ),
           ),
           Positioned(
-            bottom: -80, left: -40,
+            bottom: -90,
+            left: -50,
             child: Container(
-              width: 250, height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFEC407A).withOpacity(0.06),
-              ),
+              width: 260,
+              height: 260,
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x55D9EEC5)),
             ),
           ),
           SafeArea(
-            child: isTablet ? _buildTabletLayout(context, tale) : _buildPhoneLayout(context, tale),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabletLayout(BuildContext context, FairyTale tale) {
-    return Row(
-      children: [
-        Expanded(
-          flex: 5,
-          child: Hero(
-            tag: 'tale_${tale.title}',
-            child: Container(
-              margin: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.25), blurRadius: 30, offset: const Offset(0, 12))],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: StoryImageView(imagePath: tale.imagePath, fit: BoxFit.cover),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 700;
+                return isWide ? _buildWideLayout(tale) : _buildNarrowLayout(tale);
+              },
             ),
           ),
-        ),
-        Expanded(
-          flex: 5,
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(position: _slideAnim, child: _buildInfoPanel(context, tale, isTablet: true)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPhoneLayout(BuildContext context, FairyTale tale) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              Hero(
-                tag: 'tale_${tale.title}',
-                child: SizedBox(width: double.infinity, height: 300,
-                    child: StoryImageView(imagePath: tale.imagePath, fit: BoxFit.cover)),
-              ),
-              Positioned(top: 12, left: 16, child: _backButton()),
-              Positioned(top: 12, right: 16, child: _favoriteButton()),
-            ],
-          ),
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(position: _slideAnim, child: _buildInfoPanel(context, tale, isTablet: false)),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoPanel(BuildContext context, FairyTale tale, {required bool isTablet}) {
+  Widget _buildWideLayout(FairyTale tale) {
     return Padding(
-      padding: EdgeInsets.all(isTablet ? 32 : 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (isTablet) ...[
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [_backButton(), _favoriteButton()]),
-            const SizedBox(height: 24),
-          ],
-          Text('동화 상세', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-          const SizedBox(height: 12),
-          Text(tale.title,
-              style: TextStyle(fontSize: isTablet ? 32 : 26, fontWeight: FontWeight.w700, color: const Color(0xFF3D2C8D))),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(20)),
-            child: Text(tale.category,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF7E57C2), fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: List.generate(5, (i) => Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: Icon(Icons.star_rounded, size: 20, color: i < 4 ? const Color(0xFFFFB300) : Colors.grey[300]),
-            )),
-          ),
-          const SizedBox(height: 16),
-          Text(tale.description,
-              style: TextStyle(fontSize: isTablet ? 16 : 14, color: Colors.grey[700], height: 1.7)),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
-            ),
-            child: Row(children: [_infoItem('카테고리', tale.category), _divider(), _infoItem('유형', tale.isUserStory ? '내 이야기' : '원본')]),
-          ),
-          const SizedBox(height: 28),
-          SizedBox(
-            width: double.infinity,
-            child: GestureDetector(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => TaleReadingScreen(tale: tale, initialPage: 0))),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF9575CD), Color(0xFF7E57C2)]),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: const Color(0xFF7E57C2).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          Expanded(flex: 5, child: _buildCover(tale)),
+          const SizedBox(width: 36),
+          Expanded(
+            flex: 5,
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _slideAnim,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.menu_book_rounded, color: Colors.white, size: 20),
-                    SizedBox(width: 10),
-                    Text('이 동화 읽기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                    Row(
+                      children: [
+                        RoundIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+                        const Spacer(),
+                        _favoriteButton(),
+                      ],
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(top: 24),
+                        child: _buildInfo(tale, titleSize: 40),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _ReadButton(onTap: _openReading),
                   ],
                 ),
               ),
@@ -198,53 +147,236 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
     );
   }
 
-  Widget _backButton() {
-    return GestureDetector(
-      onTap: () => Navigator.pop(context),
-      child: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
+  Widget _buildNarrowLayout(FairyTale tale) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            children: [
+              RoundIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+              const Spacer(),
+              _favoriteButton(),
+            ],
+          ),
         ),
-        child: const Icon(Icons.chevron_left, color: Color(0xFF7E57C2), size: 22),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: 300, width: double.infinity, child: _buildCover(tale)),
+                const SizedBox(height: 22),
+                FadeTransition(
+                  opacity: _fadeAnim,
+                  child: SlideTransition(position: _slideAnim, child: _buildInfo(tale, titleSize: 32)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: _ReadButton(onTap: _openReading),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCover(FairyTale tale) {
+    return Hero(
+      tag: 'tale_${tale.title}',
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: AppColors.border, width: 2),
+          boxShadow: const [
+            BoxShadow(color: AppColors.border, blurRadius: 0, offset: Offset(0, 7)),
+          ],
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: tale.cardColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: StoryImageView(imagePath: tale.imagePath, fit: BoxFit.cover),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _favoriteButton() {
-    return GestureDetector(
-      onTap: () => setState(() => _isFavorite = !_isFavorite),
-      child: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))],
+  Widget _buildInfo(FairyTale tale, {required double titleSize}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _chip(
+              tale.category,
+              background: AppColors.secondaryLight,
+              color: const Color(0xFF3E6F2E),
+              icon: Icons.menu_book_rounded,
+            ),
+            _chip(
+              tale.isUserStory ? '내가 만든 이야기' : '원래 동화',
+              background: tale.isUserStory ? AppColors.primaryLight : AppColors.surfaceVariant,
+              color: AppColors.primaryText,
+              icon: tale.isUserStory ? Icons.brush_rounded : Icons.auto_stories_rounded,
+            ),
+          ],
         ),
-        child: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border,
-            size: 18, color: _isFavorite ? const Color(0xFFE91E63) : Colors.grey[400]),
-      ),
+        const SizedBox(height: 14),
+        Text(
+          tale.title,
+          style: AppTextStyles.display().copyWith(fontSize: titleSize, height: 1.2),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          tale.description,
+          style: AppTextStyles.bodyLarge(color: AppColors.textSecondary).copyWith(height: 1.8),
+        ),
+        const SizedBox(height: 22),
+        _buildCrayongTip(),
+      ],
     );
   }
 
-  Widget _infoItem(String label, String value) {
-    return Expanded(
-      child: Column(
+  Widget _buildCrayongTip() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
+      decoration: AppDecorations.sticker(
+        color: AppColors.secondaryLight,
+        shadowColor: const Color(0xFFBFDDA5),
+        radius: 22,
+        depth: 4,
+      ),
+      child: Row(
         children: [
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(20)),
-            child: Text(value,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF7E57C2))),
+          Image.asset(CrayongImages.wink, height: 64),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('크레용이 읽어 줄게요!', style: AppTextStyles.headingSmall()),
+                Text(
+                  '읽다가 바꾸고 싶은 장면이 있으면 내 마음대로 바꿀 수도 있어요.',
+                  style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _divider() => Container(width: 1, height: 32, color: Colors.grey[200]);
+  Widget _chip(String text, {required Color background, required Color color, required IconData icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 5),
+          Text(text, style: AppTextStyles.labelMedium(color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _favoriteButton() {
+    final isFav = context.watch<FavoritesProvider>().isFavorite(widget.tale);
+    return GestureDetector(
+      onTap: _toggleFavorite,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 44,
+          decoration: BoxDecoration(
+            color: isFav ? AppColors.accentLight : AppColors.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: isFav ? AppColors.accent : AppColors.border, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: isFav ? const Color(0xFFF1D6CA) : AppColors.border,
+                blurRadius: 0,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                size: 20,
+                color: isFav ? AppColors.accentDark : AppColors.textHint,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isFav ? '좋아해요' : '즐겨찾기',
+                style: AppTextStyles.headingSmall(
+                  color: isFav ? AppColors.accentDark : AppColors.textSecondary,
+                ).copyWith(fontSize: 16, height: 1.1),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _ReadButton({required this.onTap});
+
+  @override
+  State<_ReadButton> createState() => _ReadButtonState();
+}
+
+class _ReadButtonState extends State<_ReadButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const depth = 5.0;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 62,
+          width: double.infinity,
+          transform: Matrix4.translationValues(0, _pressed ? depth : 0, 0),
+          decoration: AppDecorations.primaryButton(radius: 20, depth: _pressed ? 0 : depth),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.menu_book_rounded, color: AppColors.onPrimary, size: 24),
+              const SizedBox(width: 10),
+              Text('이 동화 읽기', style: AppTextStyles.button().copyWith(fontSize: 24)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

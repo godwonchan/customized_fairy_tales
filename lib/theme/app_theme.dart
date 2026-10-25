@@ -108,11 +108,11 @@ class AppTextStyles {
         letterSpacing: 0.5,
       );
 
-  static TextStyle button({Color? color}) => GoogleFonts.gothicA1(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
+  static TextStyle button({Color? color}) => GoogleFonts.poorStory(
+        fontSize: 20,
+        fontWeight: FontWeight.w400,
         color: color ?? AppColors.onPrimary,
-        letterSpacing: 0.3,
+        height: 1.2,
       );
 
   static TextStyle caption({Color? color}) => GoogleFonts.gothicA1(

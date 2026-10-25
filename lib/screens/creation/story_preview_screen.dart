@@ -10,6 +10,7 @@ import 'custom_story_create_screen.dart' show ChatRole, QuickReply;
 import 'lumi_chat_controller.dart';
 import 'lumi_chat_panel.dart';
 import 'story_reader_screen.dart';
+import '../../theme/app_theme.dart';
 
 class StoryPreviewScreen extends StatefulWidget {
   final Map<String, Uint8List?> assetPngBytes;
@@ -35,17 +36,17 @@ class StoryPreviewScreen extends StatefulWidget {
 
 class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   static const String _baseUrl = 'http://localhost:8000';
-  static const String _lumiImagePath = 'assets/images/lumi.jpg';
+  static const String _lumiImagePath = CrayongImages.wink;
   static const int _minPageCount = 1;
 
   // 그리기 화면과 같은 색
-  static const Color _purple = Color(0xFF7C4DFF);
-  static const Color _purpleDark = Color(0xFF5B2FE0);
-  static const Color _ink = Color(0xFF2B2A4C);
-  static const Color _sub = Color(0xFF8A86A8);
-  static const Color _cardLine = Color(0xFFEAE6F8);
-  static const Color _cardEdge = Color(0xFFDCD5F3);
-  static const Color _bg = Color(0xFFF4F1FF);
+  static const Color _purple = AppColors.secondaryDark;
+  static const Color _purpleDark = Color(0xFF457A36);
+  static const Color _ink = AppColors.textPrimary;
+  static const Color _sub = AppColors.textSecondary;
+  static const Color _cardLine = AppColors.border;
+  static const Color _cardEdge = Color(0xFFE6D3AE);
+  static const Color _bg = AppColors.background;
 
   bool _isGenerating = false;
   int _pageCount = 4;
@@ -63,7 +64,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   bool _speechAvailable = false;
   bool _isListening = false;
 
-  String _storyTitle = '루미가 동화를 짓고 있어... ✨';
+  String _storyTitle = '크레용이 동화를 짓고 있어...';
   List<Map<String, dynamic>> _storyPages = [];
 
   bool get _hasStory => _storyPages.isNotEmpty;
@@ -84,10 +85,10 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       _pageImages.addAll(Map<int, String>.from(widget.cachedStoryData!['pageImages'] ?? {}));
       _pageImageSignatures.addAll(Map<int, String>.from(widget.cachedStoryData!['pageImageSignatures'] ?? {}));
       if (_storyPages.isNotEmpty) _pageCount = _storyPages.length;
-      _lumi.addLumi('전에 만든 줄거리를 가져왔어! 📖\n고치고 싶은 곳이 있으면 말하거나 써 줘 ✏️');
+      _lumi.addLumi('전에 만든 줄거리를 가져왔어!\n고치고 싶은 곳이 있으면 말하거나 써 줘');
     } else {
       // 🎯 더미 캐시이거나 처음 진입 시: 화 수를 고른 뒤 줄거리 생성
-      _lumi.addLumi('몇 화짜리 동화로 만들까? 📖\n위에서 고르고 "줄거리 만들기"를 눌러 줘!');
+      _lumi.addLumi('몇 화짜리 동화로 만들까?\n위에서 고르고 "줄거리 만들기"를 눌러 줘!');
     }
   }
 
@@ -203,8 +204,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
 
         _lumi.setThinking(false);
         _lumi.addLumi(feedback != null
-            ? '다 고쳤어! 새 줄거리를 읽어 봐 ✨'
-            : '줄거리가 완성됐어! 🎉\n고치고 싶은 곳이 있으면 말하거나 써 줘 ✏️');
+            ? '다 고쳤어! 새 줄거리를 읽어 봐'
+            : '줄거리가 완성됐어!\n고치고 싶은 곳이 있으면 말하거나 써 줘');
       } else {
         throw Exception('서버 응답 에러: ${response.statusCode}');
       }
@@ -220,7 +221,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         ];
       });
       _lumi.setThinking(false);
-      _lumi.addLumi('앗, 이야기를 짓다가 문제가 생겼어 😢\n위의 🔄 버튼으로 다시 지어 볼래?');
+      _lumi.addLumi('앗, 이야기를 짓다가 문제가 생겼어\n위의 다시 짓기 버튼으로 다시 지어 볼래?');
     }
   }
 
@@ -278,7 +279,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         if (changed) _storyTitle = title;
         _editingIndex = null;
       });
-      if (changed) _lumi.addLumi('"$title"! 멋진 제목이다 ✨');
+      if (changed) _lumi.addLumi('"$title"! 멋진 제목이다');
     } else {
       final page = _storyPages[index];
       final oldContent = (page['content'] ?? '').toString();
@@ -290,7 +291,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         if (content.isNotEmpty) page['content'] = content;
         _editingIndex = null;
       });
-      if (changed) _lumi.addLumi('네가 고친 ${index + 1}화 정말 좋다! ✨');
+      if (changed) _lumi.addLumi('네가 고친 ${index + 1}화 정말 좋다!');
       if (contentChanged) _checkEdit(index, oldContent, wasSceneFresh);
     }
   }
@@ -340,7 +341,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           label: '이 화만',
           onTap: () {
             _lumi.addChild('이 화만!');
-            _lumi.addLumi('알겠어! ${index + 1}화만 바꿀게 ✨');
+            _lumi.addLumi('알겠어! ${index + 1}화만 바꿀게');
           },
         ),
       ]);
@@ -443,7 +444,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
 
   ThemeData _kidsTheme(BuildContext context) {
     final base = Theme.of(context);
-    final String? kidsFont = GoogleFonts.jua().fontFamily;
+    final String? kidsFont = GoogleFonts.gothicA1().fontFamily;
     return base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: kidsFont, bodyColor: _ink, displayColor: _ink),
       primaryTextTheme: base.primaryTextTheme.apply(fontFamily: kidsFont),
@@ -619,8 +620,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                   children: [
                     _buildLumiAvatar(36),
                     const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text('요정 루미', style: TextStyle(fontSize: 18, color: Colors.white)),
+                    Expanded(
+                      child: Text('크레용', style: AppTextStyles.headingSmall(color: Colors.white)),
                     ),
                     IconButton(
                       tooltip: '접기',
@@ -698,8 +699,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _ink),
             onPressed: _popWithStoryData,
           ),
-          const Expanded(
-            child: Text('줄거리 만들기', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, color: _ink)),
+          Expanded(
+            child: Text('줄거리 만들기', textAlign: TextAlign.center, style: AppTextStyles.headingLarge()),
           ),
           IconButton(
             tooltip: '이야기 다시 짓기',
@@ -748,11 +749,11 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       child: Row(
         children: [
           // 좁은 폰에서 '바꾸기' 버튼이 생겨도 넘치지 않도록 글자가 줄바꿈되게 함
-          const Expanded(child: Text('몇 화로 만들까?', style: TextStyle(fontSize: 16, color: _ink))),
+          Expanded(child: Text('몇 화로 만들까?', style: AppTextStyles.headingSmall())),
           _buildStepButton(Icons.remove_rounded, _pageCount > _minPageCount ? () => _changePageCount(-1) : null),
           SizedBox(
             width: 64,
-            child: Text('$_pageCount화', textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, color: _ink)),
+            child: Text('$_pageCount화', textAlign: TextAlign.center, style: AppTextStyles.headingLarge()),
           ),
           _buildStepButton(Icons.add_rounded, () => _changePageCount(1)),
           // 줄거리가 있을 때 화 수를 바꾸면 눌러서 적용 (누를 때마다 다시 짓지 않도록)
@@ -765,7 +766,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 alignment: Alignment.center,
                 decoration: _card(radius: 16, color: _purple, edge: _purpleDark),
-                child: const Text('바꾸기', style: TextStyle(fontSize: 16, color: Colors.white)),
+                child: Text('바꾸기', style: AppTextStyles.button(color: Colors.white).copyWith(fontSize: 18)),
               ),
             ),
           ],
@@ -791,21 +792,13 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     return Container(
       width: size,
       height: size,
+      padding: EdgeInsets.all(size * 0.06),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white,
-        border: Border.all(color: _cardLine, width: 3),
+        color: AppColors.secondaryLight,
+        border: Border.all(color: Colors.white, width: 3),
       ),
-      child: ClipOval(
-        child: Image.asset(
-          _lumiImagePath,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, err, stack) => Container(
-            color: _purple,
-            child: Icon(Icons.face_retouching_natural, color: Colors.white, size: size * 0.55),
-          ),
-        ),
-      ),
+      child: Image.asset(_lumiImagePath, fit: BoxFit.contain),
     );
   }
 
@@ -820,9 +813,9 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 4, color: _purple)),
             const SizedBox(height: 14),
             Text(
-              '루미가 $_pageCount화짜리 동화를\n짓고 있어... ✨',
+              '크레용이 $_pageCount화짜리 동화를\n짓고 있어...',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18, height: 1.5, color: _purple),
+              style: AppTextStyles.headingMedium(color: _purple),
             ),
           ],
         ),
@@ -841,7 +834,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
               builder: (context, constraints) => SizedBox(
                 width: math.max(constraints.maxWidth * 0.5, 260),
                 child: _buildBigButton(
-                  label: '$_pageCount화 줄거리 만들기 ✨',
+                  label: '$_pageCount화 줄거리 만들기',
                   icon: Icons.auto_fix_high_rounded,
                   onTap: () => _fetchRealStory(),
                 ),
@@ -880,7 +873,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                     child: Text(
                       _storyTitle,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 24, color: _ink),
+                      style: AppTextStyles.display(),
                     ),
                   ),
                   _buildPencilButton(-1),
@@ -919,14 +912,14 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                 decoration: BoxDecoration(color: _purple, borderRadius: BorderRadius.circular(12)),
                 child: Text(
                   page['page'] ?? '${index + 1}화',
-                  style: const TextStyle(fontSize: 15, color: Colors.white),
+                  style: AppTextStyles.labelMedium(color: Colors.white),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: editing
                     ? _buildEditField(_editTitleCtrl, fontSize: 18, hint: '소제목')
-                    : Text(page['title'] ?? '', style: const TextStyle(fontSize: 18, color: _ink)),
+                    : Text(page['title'] ?? '', style: AppTextStyles.headingMedium()),
               ),
               if (!editing) _buildPencilButton(index),
             ],
@@ -993,7 +986,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
               duration: const Duration(milliseconds: 200),
               width: 48,
               height: 48,
-              decoration: _card(radius: 24, color: _isListening ? Colors.redAccent : Colors.white),
+              decoration: _card(radius: 24, color: _isListening ? AppColors.accent : Colors.white),
               child: Icon(
                 _isListening ? Icons.mic : Icons.mic_none_rounded,
                 color: _isListening ? Colors.white : _purple,
@@ -1004,12 +997,12 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         ),
         if (_isListening) ...[
           const SizedBox(width: 8),
-          const Text('듣고 있어! 말해 봐…', style: TextStyle(fontSize: 15, color: _purple)),
+          Text('듣고 있어! 말해 봐…', style: AppTextStyles.headingSmall(color: _purple).copyWith(fontSize: 16)),
         ],
         const Spacer(),
         TextButton(
           onPressed: _cancelEdit,
-          child: const Text('취소', style: TextStyle(fontSize: 16, color: _sub)),
+          child: Text('취소', style: AppTextStyles.button(color: _sub).copyWith(fontSize: 18)),
         ),
         const SizedBox(width: 6),
         GestureDetector(
@@ -1019,7 +1012,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             alignment: Alignment.center,
             decoration: _card(radius: 16, color: _purple, edge: _purpleDark),
-            child: const Text('저장', style: TextStyle(fontSize: 16, color: Colors.white)),
+            child: Text('저장', style: AppTextStyles.button(color: Colors.white).copyWith(fontSize: 18)),
           ),
         ),
       ],
@@ -1044,7 +1037,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           children: [
             Icon(icon, color: Colors.white, size: 22),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 18, color: Colors.white)),
+            Text(label, style: AppTextStyles.button(color: Colors.white)),
           ],
         ),
       ),
@@ -1064,12 +1057,12 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                 height: 58,
                 alignment: Alignment.center,
                 decoration: _card(radius: 20),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.brush_rounded, color: _purple, size: 20),
-                    SizedBox(width: 6),
-                    Text('그림 더 고칠래', style: TextStyle(fontSize: 16, color: _purple)),
+                    const Icon(Icons.brush_rounded, color: _purple, size: 20),
+                    const SizedBox(width: 6),
+                    Text('그림 더 고칠래', style: AppTextStyles.button(color: _purple)),
                   ],
                 ),
               ),
@@ -1187,7 +1180,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('바뀐 곳이 있어', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF3D2C8D))),
+        title: Text('바뀐 곳이 있어', style: AppTextStyles.headingMedium()),
         content: Text('$pageLabels화의 이야기나 그림이 바뀌었어.\n바뀐 화 그림을 새로 그릴까?'),
         actions: [
           TextButton(
@@ -1197,7 +1190,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7E57C2),
+              backgroundColor: AppColors.secondaryDark,
               foregroundColor: Colors.white,
             ),
             child: const Text('새로 그리기'),
@@ -1261,26 +1254,28 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20)],
+            border: Border.all(color: AppColors.border, width: 2),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Image.asset(CrayongImages.drawing, height: 120),
+              const SizedBox(height: 14),
               const SizedBox(
-                width: 48, height: 48,
-                child: CircularProgressIndicator(strokeWidth: 3.5, color: Color(0xFF7E57C2)),
+                width: 180,
+                child: LinearProgressIndicator(minHeight: 6, borderRadius: BorderRadius.all(Radius.circular(3))),
               ),
-              const SizedBox(height: 20),
-              const Text(
-                '루미가 동화책을 마법으로 인쇄하고 있어! 📖✨',
+              const SizedBox(height: 16),
+              Text(
+                '크레용이 동화책에 그림을 그리고 있어!',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF3D2C8D)),
+                style: AppTextStyles.headingMedium(),
               ),
               const SizedBox(height: 8),
               Text(
-                '예쁜 수채화 그림과 이야기를 엮는 중이야 (잠시만 기다려줘)',
+                '예쁜 그림과 이야기를 엮는 중이야. 잠깐만 기다려 줘!',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: AppTextStyles.bodyMedium(),
               ),
             ],
           ),
@@ -1349,7 +1344,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('그림 몇 장을 못 그렸어', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF3D2C8D))),
+        title: Text('그림 몇 장을 못 그렸어', style: AppTextStyles.headingMedium()),
         content: Text('$pageLabels페이지 그림을 그리지 못했어.\n이 페이지만 다시 그려 볼까?'),
         actions: [
           TextButton(
@@ -1359,7 +1354,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7E57C2),
+              backgroundColor: AppColors.secondaryDark,
               foregroundColor: Colors.white,
             ),
             child: const Text('다시 그리기'),

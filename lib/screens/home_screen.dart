@@ -8,14 +8,18 @@ import '../theme/app_theme.dart';
 import 'creation/custom_story_create_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, this.initialIndex = 0, this.initialMyStoriesTab = 0});
+
+  final int initialIndex;
+  final int initialMyStoriesTab;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _selectedIndex = 0;
+  late int _selectedIndex = widget.initialIndex;
+  late int _myStoriesTab = widget.initialMyStoriesTab;
 
   static const _tabs = [
     {'icon': Icons.home_rounded, 'label': '홈'},
@@ -24,14 +28,22 @@ class _AppShellState extends State<AppShell> {
     {'icon': Icons.settings_rounded, 'label': '설정'},
   ];
 
-  void _selectTab(int index) => setState(() => _selectedIndex = index);
+  void _selectTab(int index, {int myStoriesTab = 0}) {
+    setState(() {
+      _selectedIndex = index;
+      _myStoriesTab = myStoriesTab;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeScreen(onTabChange: _selectTab),
+      HomeScreen(
+        onTabChange: _selectTab,
+        onOpenFavorites: () => _selectTab(2, myStoriesTab: 2),
+      ),
       const FairyTaleListScreen(),
-      const MyStoriesScreen(),
+      MyStoriesScreen(key: ValueKey(_myStoriesTab), initialTab: _myStoriesTab),
       const SettingsScreen(),
     ];
 
@@ -108,9 +120,10 @@ class _AppShellState extends State<AppShell> {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onTabChange});
+  const HomeScreen({super.key, this.onTabChange, this.onOpenFavorites});
 
   final ValueChanged<int>? onTabChange;
+  final VoidCallback? onOpenFavorites;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -174,6 +187,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
     final page = index == 1 ? const FairyTaleListScreen() : const MyStoriesScreen();
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  void _openFavorites() {
+    if (widget.onOpenFavorites != null) {
+      widget.onOpenFavorites!();
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MyStoriesScreen(initialTab: 2)),
+    );
   }
 
   void _navigateToStoryCreation() {
@@ -384,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen>
         shadow: const Color(0xFFF1D6CA),
         labelColor: AppColors.accentDark,
         crayong: CrayongImages.celebrate,
-        onTap: () => _goToTab(2),
+        onTap: _openFavorites,
       ),
     ];
 
