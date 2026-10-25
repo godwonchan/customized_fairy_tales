@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'custom_story_create_screen.dart' show ChatMessage, ChatRole, QuickReply;
 import 'lumi_chat_controller.dart';
+import '../../theme/app_theme.dart';
 
 // 루미 대화 목록 + 입력줄 (입력을 어떻게 처리할지는 화면마다 onSend로 정함)
 class LumiChatPanel extends StatefulWidget {
@@ -29,12 +30,12 @@ class LumiChatPanel extends StatefulWidget {
 }
 
 class _LumiChatPanelState extends State<LumiChatPanel> {
-  static const String _lumiImagePath = 'assets/images/lumi.jpg';
-  static const Color _purple = Color(0xFF7C4DFF);
-  static const Color _purpleDark = Color(0xFF5B2FE0);
-  static const Color _ink = Color(0xFF2B2A4C);
-  static const Color _cardLine = Color(0xFFEAE6F8);
-  static const Color _cardEdge = Color(0xFFDCD5F3);
+  static const String _lumiImagePath = CrayongImages.wink;
+  static const Color _purple = AppColors.secondaryDark;
+  static const Color _purpleDark = Color(0xFF457A36);
+  static const Color _ink = AppColors.textPrimary;
+  static const Color _cardLine = AppColors.border;
+  static const Color _cardEdge = Color(0xFFE6D3AE);
 
   final ScrollController _scrollCtrl = ScrollController();
 
@@ -95,23 +96,15 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
 
   Widget _buildAvatar() {
     return Container(
-      width: 34,
-      height: 34,
+      width: 36,
+      height: 36,
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white,
-        border: Border.all(color: _cardLine, width: 2),
+        color: AppColors.secondaryLight,
+        border: Border.all(color: Colors.white, width: 2),
       ),
-      child: ClipOval(
-        child: Image.asset(
-          _lumiImagePath,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, err, stack) => Container(
-            color: _purple,
-            child: const Icon(Icons.face_retouching_natural, color: Colors.white, size: 18),
-          ),
-        ),
-      ),
+      child: Image.asset(_lumiImagePath, fit: BoxFit.contain),
     );
   }
 
@@ -121,19 +114,19 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isLumi ? Colors.white : _purple,
+          color: isLumi ? Colors.white : AppColors.primaryLight,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(isLumi ? 6 : 20),
             topRight: Radius.circular(isLumi ? 20 : 6),
             bottomLeft: const Radius.circular(20),
             bottomRight: const Radius.circular(20),
           ),
-          border: isLumi ? Border.all(color: _cardLine, width: 2) : null,
-          boxShadow: [BoxShadow(color: isLumi ? _cardEdge : _purpleDark, offset: const Offset(0, 3))],
+          border: Border.all(color: isLumi ? _cardLine : AppColors.primary, width: 2),
+          boxShadow: [BoxShadow(color: isLumi ? _cardEdge : AppColors.primaryDark, offset: const Offset(0, 3))],
         ),
         child: Text(
           m.text,
-          style: TextStyle(fontSize: 16, height: 1.4, color: isLumi ? _ink : Colors.white),
+          style: AppTextStyles.bodyLarge(color: _ink).copyWith(height: 1.45),
         ),
       ),
     );
@@ -162,7 +155,7 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
         ),
         child: Text(
           r.label,
-          style: TextStyle(fontSize: 16, color: r.primary ? Colors.white : _ink),
+          style: AppTextStyles.button(color: r.primary ? Colors.white : _ink).copyWith(fontSize: 18),
         ),
       ),
     );
@@ -179,12 +172,11 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
               enabled: widget.enabled,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => widget.onSend(),
-              style: const TextStyle(fontSize: 16, color: _ink),
+              style: AppTextStyles.bodyLarge(color: _ink),
               decoration: InputDecoration(
                 hintText: widget.isListening ? '듣고 있어! 말해 봐…' : widget.hintText,
-                hintStyle: TextStyle(
-                  fontSize: 15,
-                  color: widget.isListening ? _purple : Colors.grey[500],
+                hintStyle: AppTextStyles.bodyMedium(
+                  color: widget.isListening ? _purple : AppColors.textHint,
                 ),
                 filled: true,
                 fillColor: Colors.white,
@@ -198,7 +190,7 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
           const SizedBox(width: 8),
           _buildRoundButton(
             icon: widget.isListening ? Icons.mic : Icons.mic_none_rounded,
-            color: widget.isListening ? Colors.redAccent : Colors.white,
+            color: widget.isListening ? AppColors.accent : Colors.white,
             iconColor: widget.isListening ? Colors.white : _purple,
             onTap: widget.enabled ? widget.onMicTap : null,
           ),
@@ -228,12 +220,12 @@ class _LumiChatPanelState extends State<LumiChatPanel> {
         width: 52,
         height: 52,
         decoration: BoxDecoration(
-          color: enabled ? color : Colors.grey[300],
+          color: enabled ? color : AppColors.surfaceVariant,
           shape: BoxShape.circle,
           border: color == Colors.white ? Border.all(color: _cardLine, width: 2) : null,
-          boxShadow: [BoxShadow(color: enabled ? _cardEdge : Colors.black12, offset: const Offset(0, 3))],
+          boxShadow: [BoxShadow(color: enabled ? (color == _purple ? _purpleDark : _cardEdge) : _cardLine, offset: const Offset(0, 3))],
         ),
-        child: Icon(icon, color: enabled ? iconColor : Colors.white, size: 26),
+        child: Icon(icon, color: enabled ? iconColor : AppColors.textHint, size: 26),
       ),
     );
   }

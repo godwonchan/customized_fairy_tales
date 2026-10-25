@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/crayong_widgets.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -12,6 +15,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nicknameController = TextEditingController();
   String _username = '';
+  String _savedNickname = '';
   bool _isLoading = false;
   bool _isSaving = false;
 
@@ -33,17 +37,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() {
       _username = info['username']!;
-      _nicknameController.text = info['nickname']!;
+      _savedNickname = info['nickname']!;
+      _nicknameController.text = _savedNickname;
       _isLoading = false;
     });
+  }
+
+  void _showMessage(String text, {String image = CrayongImages.wink}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Image.asset(image, width: 30, height: 30),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text, style: AppTextStyles.labelLarge(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _saveNickname() async {
     final newNick = _nicknameController.text.trim();
     if (newNick.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('닉네임을 입력해 주세요.')),
-      );
+      _showMessage('닉네임을 입력해 주세요.', image: CrayongImages.surprised);
       return;
     }
 
@@ -51,17 +70,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await ApiService.updateNickname(newNick);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('✨ 닉네임이 "$newNick"(으)로 변경되었어요!'),
-          backgroundColor: const Color(0xFF7E57C2),
-        ),
-      );
-      // 이전 화면(홈 화면)으로 true를 넘겨서 이름 즉시 갱신
+      _showMessage('이제 "$newNick"(이)라고 부를게요!', image: CrayongImages.celebrate);
       Navigator.pop(context, true);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('변경 실패: $e'), backgroundColor: Colors.red),
+      if (!mounted) return;
+      _showMessage(
+        kDebugMode ? '변경 실패: $e' : '닉네임을 못 바꿨어요. 잠시 후 다시 해 볼래요?',
+        image: CrayongImages.surprised,
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -71,175 +86,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _handleLogout() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('로그아웃', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('정말 이야기 세상에서 로그아웃할까요?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7E57C2),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('로그아웃'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await ApiService.logout();
-      if (!mounted) return;
-      // 스택 전체 비우고 로그인 화면으로 이동
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF3D2C8D),
-        elevation: 0,
-        title: const Text('내 프로필 & 계정', style: TextStyle(fontWeight: FontWeight.bold)),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF7E57C2)))
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+      builder: (context) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // 상단 프로필 아바타 영역
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFFFB74D), width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF7E57C2).withOpacity(0.15),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.face_rounded, size: 60, color: Color(0xFFFF9800)),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                Image.asset(CrayongImages.surprised, height: 100),
+                const SizedBox(height: 12),
+                Text('정말 로그아웃할까요?', style: AppTextStyles.headingMedium()),
+                const SizedBox(height: 4),
                 Text(
-                  _nicknameController.text,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF3D2C8D),
-                  ),
+                  '크레용이 여기서 기다리고 있을게요.',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMedium(),
                 ),
-                const SizedBox(height: 28),
-
-                // 정보 및 수정 카드
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, 4)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '계정 정보',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF3D2C8D),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.border, width: 2),
                         ),
+                        child: const Text('더 있을래요'),
                       ),
-                      const SizedBox(height: 16),
-
-                      // 아이디 (읽기 전용)
-                      _infoRow('아이디', _username.isNotEmpty ? _username : '로컬 사용자'),
-                      const Divider(height: 28),
-
-                      // 닉네임 수정 입력 필드
-                      const Text(
-                        '닉네임 변경',
-                        style: TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _nicknameController,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF8F4FF),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton(
-                            onPressed: _isSaving ? null : _saveNickname,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF7E57C2),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            ),
-                            child: _isSaving
-                                ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                                : const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 로그아웃 버튼
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _handleLogout,
-                    icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                    label: const Text('로그아웃', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFFFCDD2)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                          textStyle: AppTextStyles.button(color: Colors.white),
+                        ),
+                        child: const Text('로그아웃'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -247,15 +135,198 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+
+    if (confirm == true) {
+      await ApiService.logout();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
-  Widget _infoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF3D2C8D))),
-      ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  RoundIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('내 프로필', style: AppTextStyles.display()),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _isLoading
+                  ? const CrayongStatusView(
+                      image: CrayongImages.drawing,
+                      title: '내 정보를 가져오고 있어요',
+                      child: SizedBox(
+                        width: 160,
+                        child: LinearProgressIndicator(minHeight: 6, borderRadius: BorderRadius.all(Radius.circular(3))),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 480),
+                          child: Column(
+                            children: [
+                              _buildAvatar(),
+                              const SizedBox(height: 14),
+                              Text(
+                                _savedNickname.isNotEmpty ? _savedNickname : '동화친구',
+                                style: AppTextStyles.display(),
+                              ),
+                              Text('크레용의 동화 친구', style: AppTextStyles.bodyMedium()),
+                              const SizedBox(height: 24),
+                              _buildInfoCard(),
+                              const SizedBox(height: 20),
+                              _buildLogoutButton(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar() {
+    return SizedBox(
+      width: 150,
+      height: 124,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 112,
+            height: 112,
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.surface, width: 5),
+              boxShadow: const [
+                BoxShadow(color: AppColors.border, blurRadius: 0, offset: Offset(0, 5)),
+              ],
+            ),
+            child: const Icon(Icons.face_rounded, size: 64, color: AppColors.primaryText),
+          ),
+          Positioned(
+            right: -10,
+            bottom: -6,
+            child: Image.asset(CrayongImages.wink, height: 70),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: AppDecorations.card(radius: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('계정 정보', style: AppTextStyles.headingMedium()),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.secondaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.badge_rounded, size: 20, color: AppColors.secondaryDark),
+              ),
+              const SizedBox(width: 12),
+              Text('아이디', style: AppTextStyles.bodyMedium()),
+              const Spacer(),
+              Text(
+                _username.isNotEmpty ? _username : '로컬 사용자',
+                style: AppTextStyles.labelLarge(),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(height: 1, color: AppColors.border),
+          ),
+          Text('닉네임 바꾸기', style: AppTextStyles.labelMedium()),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _nicknameController,
+                  style: AppTextStyles.bodyLarge(),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (!_isSaving) _saveNickname();
+                  },
+                  decoration: const InputDecoration(
+                    hintText: '불리고 싶은 이름',
+                    prefixIcon: Icon(Icons.edit_rounded, size: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveNickname,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary),
+                        )
+                      : const Text('저장'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton.icon(
+        onPressed: _handleLogout,
+        icon: const Icon(Icons.logout_rounded, color: AppColors.accentDark, size: 20),
+        label: Text('로그아웃', style: AppTextStyles.button(color: AppColors.accentDark)),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          side: const BorderSide(color: AppColors.accentLight, width: 2),
+        ),
+      ),
     );
   }
 }

@@ -1,15 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 import '../utils/cover_asset_helper.dart';
 import 'fairy_tale_detail_screen.dart';
-import '../widgets/story_image_view.dart';
+import '../widgets/crayong_widgets.dart';
 
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:lottie/lottie.dart';
 
 class FairyTale {
-  final String id; // 👈 [추가!] 동화 고유 식별자 (PK)
+  final String id;
   final String title;
   final String description;
   final String imagePath;
@@ -22,7 +23,7 @@ class FairyTale {
   final String? originalTitle;
 
   FairyTale({
-    String? id, // 👈 [추가!] 선택 인자로 받음
+    String? id,
     required this.title,
     required this.description,
     required this.imagePath,
@@ -33,10 +34,10 @@ class FairyTale {
     this.category = '동화',
     this.sourceFolder,
     this.originalTitle,
-  }): id = id ?? 'tale_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode}'; // 👈 없으면 타임스탬프 고유 ID 자동 부여
+  }) : id = id ?? 'tale_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode}';
 
   FairyTale copyWith({
-    String? id, // 👈 [추가!] 복사 시에도 ID 유지
+    String? id,
     String? title,
     String? description,
     String? imagePath,
@@ -49,7 +50,7 @@ class FairyTale {
     String? originalTitle,
   }) {
     return FairyTale(
-      id: id ?? this.id, // 👈 [추가!] 기존 고유 ID 그대로 물려받기
+      id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
       imagePath: imagePath ?? this.imagePath,
@@ -76,7 +77,6 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
   String? _errorMessage;
   List<FairyTale> _stories = [];
 
-  // [병규 튜토리얼] 타깃 지정을 위한 GlobalKey 및 컨트롤러
   final GlobalKey _titleKey = GlobalKey();
   final GlobalKey _firstCardKey = GlobalKey();
   TutorialCoachMark? _tutorialCoachMark;
@@ -89,13 +89,13 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
   }
 
   Color _colorForIndex(int index) {
-    final colors = [
-      const Color(0xFFFFF3E0),
-      const Color(0xFFE8F5E9),
-      const Color(0xFFE3F2FD),
-      const Color(0xFFF3E5F5),
-      const Color(0xFFFFEBEE),
-      const Color(0xFFE0F7FA),
+    const colors = [
+      AppColors.primaryLight,
+      AppColors.secondaryLight,
+      AppColors.accentLight,
+      Color(0xFFE2F0F8),
+      AppColors.surfaceVariant,
+      Color(0xFFEDE6F6),
     ];
     return colors[index % colors.length];
   }
@@ -116,12 +116,9 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
         final sourceFolder = item['source_folder']?.toString();
         final originalTitle = item['original_title']?.toString();
         final title = (item['title'] ?? '제목 없음').toString();
-
-        // 🎯 [핵심 추가] 백엔드가 내려준 고유 ID 추출 (id 또는 tale_id)
         final rawId = item['id'] ?? item['tale_id'] ?? item['story_id'];
 
         return FairyTale(
-          // 🎯 [핵심 추가] 서버의 고유 ID를 기반으로 네임스페이스 키('tale_1', 'tale_2' 등) 확정!
           id: rawId != null ? 'tale_$rawId' : 'tale_${title.hashCode}',
           title: title,
           description: (item['description'] ?? '동화를 읽어보세요.').toString(),
@@ -145,11 +142,9 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
         _isLoading = false;
       });
 
-      // [병규 튜토리얼 추가] 카드 렌더링 후 첫 화면 튜토리얼 실행
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _checkAndShowTutorial();
       });
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -168,174 +163,130 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
     ).then((_) => _loadStories());
   }
 
-  Widget _buildStoryCard(FairyTale tale, {Key? key}) {
-    return GestureDetector(
-      key: key, // 전달받은 key 연결
-      onTap: () => _openTale(tale),
-      child: Container(
-        decoration: BoxDecoration(
-          color: tale.cardColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
+  @override
+  Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: tale.cardColor,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(20),
-                  ),
-                  child: StoryImageView(
-                    imagePath: tale.imagePath,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tale.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF3D2C8D),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    tale.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      height: 1.5,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E5F5),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      tale.category,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF7E57C2),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildHeader(canPop),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width >= 700;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF3D2C8D),
-        elevation: 0,
-        title: Text('동화목록', key: _titleKey),
-        actions: [
-          // [추가] 언제든 튜토리얼을 다시 볼 수 있는 도움말 버튼
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: Color(0xFF7E57C2)),
+  Widget _buildHeader(bool canPop) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          if (canPop) ...[
+            RoundIconButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Text('동화 목록', key: _titleKey, style: AppTextStyles.display()),
+          const SizedBox(width: 12),
+          if (!_isLoading && _errorMessage == null && _stories.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.secondaryLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_stories.length}권',
+                style: AppTextStyles.labelMedium(color: const Color(0xFF3E6F2E)),
+              ),
+            ),
+          const Spacer(),
+          RoundIconButton(
+            icon: Icons.help_outline_rounded,
             tooltip: '도움말 다시보기',
-            onPressed: () => _checkAndShowTutorial(force: true),
+            onTap: () => _checkAndShowTutorial(force: true),
           ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF7E57C2),
-              ),
-            )
-          : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-                )
-              : _stories.isEmpty
-                  ? const Center(
-                      child: Text(
-                        '표시할 동화가 없어요.',
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadStories,
-                      child: GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _stories.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: isTablet ? 3 : 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.72,
-                        ),
-                        itemBuilder: (context, index) {
-                          final tale = _stories[index];
-                          // [수정] 0번째 첫 번째 카드에만 _firstCardKey 할당
-                          return _buildStoryCard(
-                            tale,
-                            key: index == 0 ? _firstCardKey : null,
-                          );
-                        },
-                      ),
-                    ),
     );
   }
-  // [병규 튜토리얼] 최초 1회 실행 체크 (force: true 시 도움말 버튼에서 강제 실행)
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return CrayongStatusView(
+        image: CrayongImages.drawing,
+        title: '크레용이 동화책을 꺼내고 있어요',
+        child: const SizedBox(
+          width: 160,
+          child: LinearProgressIndicator(minHeight: 6, borderRadius: BorderRadius.all(Radius.circular(3))),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return CrayongStatusView(
+        image: CrayongImages.surprised,
+        title: '앗, 동화책을 못 불러왔어요',
+        message: kDebugMode
+            ? _errorMessage
+            : '인터넷이 잘 연결됐는지 확인하고 다시 눌러 줄래요?',
+        child: ElevatedButton.icon(
+          onPressed: _loadStories,
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          label: const Text('다시 해볼래요'),
+        ),
+      );
+    }
+
+    if (_stories.isEmpty) {
+      return const CrayongStatusView(
+        image: CrayongImages.lying,
+        title: '아직 동화책이 없어요',
+        message: '조금 있다가 다시 와 줄래요?',
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = storyGridColumns(width);
+        return RefreshIndicator(
+          onRefresh: _loadStories,
+          color: AppColors.primaryDark,
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            itemCount: _stories.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 18,
+              mainAxisSpacing: 22,
+              childAspectRatio: 0.74,
+            ),
+            itemBuilder: (context, index) {
+              final tale = _stories[index];
+              return StoryBookCard(
+                key: index == 0 ? _firstCardKey : null,
+                tale: tale,
+                onTap: () => _openTale(tale),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _checkAndShowTutorial({bool force = false}) async {
     if (!mounted || _stories.isEmpty) return;
 
-    await Future.delayed(const Duration(milliseconds: 400)); // 카드 렌더링 완료 대기
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -345,10 +296,10 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
       _initTutorialTargets();
       _tutorialCoachMark = TutorialCoachMark(
         targets: _targets,
-        colorShadow: const Color(0xFF2D3436),
+        colorShadow: const Color(0xFF3B2F27),
         textSkip: "건너뛰기",
         paddingFocus: 8,
-        opacityShadow: 0.8,
+        opacityShadow: 0.75,
         onFinish: () async {
           await prefs.setBool('is_home_tutorial_seen', true);
         },
@@ -360,10 +311,8 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
     }
   }
 
-  // [병규 튜토리얼] 첫 화면 2단계 타깃 설정
   void _initTutorialTargets() {
     _targets = [
-      // 1단계: 환영 인사 (상단 타이틀 영역)
       TargetFocus(
         identify: "titleTarget",
         keyTarget: _titleKey,
@@ -376,35 +325,34 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
             builder: (context, controller) {
               return _buildTutorialBubble(
                 context: context,
-                title: "안녕! 이야기 세상에 온 걸 환영해!",
-                description: "나는 너만의 특별한 동화를 함께 만들어갈\n이야기 요정이야! 우리 함께 마법 같은\n새로운 이야기를 만들어볼까?",
+                image: CrayongImages.wink,
+                title: "안녕! 나는 크레용이야!",
+                description: "너만의 특별한 동화를 같이 만들어 갈\n크레용이야. 우리 같이 마법 같은\n새로운 이야기를 만들어 볼까?",
                 onNext: () => controller.next(),
               );
             },
           ),
         ],
       ),
-
-      // 2단계: 첫 번째 동화책 선택 유도
       TargetFocus(
         identify: "firstCardTarget",
         keyTarget: _firstCardKey,
         shape: ShapeLightFocus.RRect,
-        radius: 20,
+        radius: 24,
         alignSkip: Alignment.topRight,
         contents: [
           TargetContent(
             align: ContentAlign.custom,
             customPosition: CustomTargetContentPosition(
-              top: 100, // 카드 윗부분 높이에 맞춰 배치
-              // 카드 가로 너비를 고려해 카드 바로 오른쪽(빈 어두운 영역)에 요정 배치
+              top: 100,
               left: (MediaQuery.of(context).size.width >= 700) ? 460 : 280,
             ),
             builder: (context, controller) {
               return _buildTutorialBubble(
                 context: context,
+                image: CrayongImages.proud,
                 title: "마음에 드는 동화책 고르기",
-                description: "여기 있는 동화책 중 하나를 콕 눌러봐!\n내가 읽어주기도 하고, 네 마음대로\n이야기와 그림을 직접 바꿀 수도 있어!",
+                description: "여기 있는 동화책 중 하나를 콕 눌러 봐!\n내가 읽어 주기도 하고, 네 마음대로\n이야기와 그림을 바꿀 수도 있어!",
                 isLast: true,
                 onNext: () => controller.next(),
               );
@@ -415,16 +363,16 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
     ];
   }
 
-  // [병규 튜토리얼] 요정 + 말풍선 UI 컴포넌트
   Widget _buildTutorialBubble({
     required BuildContext context,
+    required String image,
     required String title,
     required String description,
     required VoidCallback onNext,
     bool isLast = false,
   }) {
     final screenSize = MediaQuery.of(context).size;
-    final fairyHeight = (screenSize.height * 0.38).clamp(200.0, 360.0);
+    final crayongHeight = (screenSize.height * 0.34).clamp(180.0, 320.0);
 
     return Material(
       color: Colors.transparent,
@@ -432,41 +380,24 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Lottie 요정 캐릭터
-          SizedBox(
-            height: fairyHeight,
-            width: fairyHeight * 0.75,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Lottie.asset(
-                    'assets/animations/fairy.json',
-                    fit: BoxFit.contain,
-                    repeat: true,
-                  ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(image, height: crayongHeight, fit: BoxFit.contain),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                decoration: AppDecorations.sticker(
+                  color: AppColors.secondaryDark,
+                  shadowColor: const Color(0xFF457A36),
+                  radius: 20,
+                  depth: 3,
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7E57C2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    "이야기 요정",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+                child: Text('크레용', style: AppTextStyles.labelLarge(color: Colors.white)),
+              ),
+            ],
           ),
           const SizedBox(width: 14),
-          // 설명 말풍선
           ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: (screenSize.width * 0.45).clamp(260.0, 380.0),
@@ -474,49 +405,26 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFD1C4E9), width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 6)),
-                ],
+                border: Border.all(color: AppColors.border, width: 2),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF3D2C8D),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF4A4A4A),
-                      height: 1.5,
-                    ),
-                  ),
+                  Text(title, style: AppTextStyles.headingMedium()),
+                  const SizedBox(height: 8),
+                  Text(description, style: AppTextStyles.bodyMedium(color: AppColors.textPrimary)),
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton(
                       onPressed: onNext,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7E57C2),
-                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text(
-                        isLast ? "동화 속으로!" : "다음으로",
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      child: Text(isLast ? "동화 속으로!" : "다음으로"),
                     ),
                   ),
                 ],

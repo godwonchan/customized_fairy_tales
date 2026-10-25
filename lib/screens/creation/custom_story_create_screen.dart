@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
 import 'story_preview_screen.dart';
+import '../../theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum CreationStage { choosing, drawing, askName, askDesc, askCustomWhat, askCustomRole, askStory, askEnding }
@@ -77,20 +78,20 @@ class CustomStoryCreateScreen extends StatefulWidget {
 
 class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     with TickerProviderStateMixin {
-  static const String _lumiImagePath = 'assets/images/lumi.jpg';
+  static const String _lumiImagePath = CrayongImages.wink;
   static const String _baseUrl = 'http://localhost:8000';
-  static const Color _purple = Color(0xFF7C4DFF);
-  static const Color _deep = Color(0xFF2B2A4C);
+  static const Color _purple = AppColors.secondaryDark;
+  static const Color _deep = AppColors.textPrimary;
 
   final List<StoryCategory> _allCategories = [
-    StoryCategory(id: 'hero', title: '주인공', fairyPrompt: '좋아! 우리 멋진 모험을 이끌어갈 주인공을 그려줘 ✨\n사람, 동물, 로봇… 뭐든지 괜찮아!', icon: Icons.person_pin, emoji: '🧒', color: Color(0xFF7E57C2), isRequired: true),
-    StoryCategory(id: 'companion', title: '단짝 친구', fairyPrompt: '주인공 곁을 지켜줄 든든한 단짝 친구나 귀여운 동물 친구를 그려볼까?', icon: Icons.pets, emoji: '🐶', color: Color(0xFF26A69A)),
-    StoryCategory(id: 'item', title: '마법 도구', fairyPrompt: '위험한 순간에 힘을 발휘할 신비한 마법 지팡이나 특별한 도구를 그려줘!', icon: Icons.auto_awesome, emoji: '🪄', color: Color(0xFFAB47BC)),
-    StoryCategory(id: 'place', title: '비밀 장소', fairyPrompt: '모험이 펼쳐질 장소를 그려줘! 우리 집, 마법의 성, 신비한 숲도 좋아.', icon: Icons.castle, emoji: '🏰', color: Color(0xFF42A5F5)),
-    StoryCategory(id: 'vehicle', title: '특별한 탈것', fairyPrompt: '하늘을 나는 양탄자, 우주선, 구름 자전거처럼 신나는 탈것을 그려볼래?', icon: Icons.rocket_launch, emoji: '🚀', color: Color(0xFFFF7043)),
-    StoryCategory(id: 'villain', title: '엉뚱한 악당', fairyPrompt: '이야기를 더 흥미진진하게 만들 귀여운 장난꾸러기 악당을 그려보자!', icon: Icons.mood_bad, emoji: '😈', color: Color(0xFF5C6BC0)),
-    StoryCategory(id: 'food', title: '좋아하는 간식', fairyPrompt: '먹으면 힘이 솟아나는 달콤한 케이크나 마법 열매를 그려보는 건 어때?', icon: Icons.icecream, emoji: '🍰', color: Color(0xFFEC407A)),
-    StoryCategory(id: 'treasure', title: '숨겨진 보물', fairyPrompt: '모험의 끝에서 발견할 반짝이는 보물 상자나 비밀 열쇠를 그려보자!', icon: Icons.vpn_key, emoji: '💎', color: Color(0xFFFFA000)),
+    StoryCategory(id: 'hero', title: '주인공', fairyPrompt: '좋아! 우리 멋진 모험을 이끌어갈 주인공을 그려줘\n사람, 동물, 로봇… 뭐든지 괜찮아!', icon: Icons.person_pin, emoji: '🧒', color: Color(0xFFE0A126), isRequired: true),
+    StoryCategory(id: 'companion', title: '단짝 친구', fairyPrompt: '주인공 곁을 지켜줄 든든한 단짝 친구나 귀여운 동물 친구를 그려볼까?', icon: Icons.pets, emoji: '🐶', color: Color(0xFF5E9E4A)),
+    StoryCategory(id: 'item', title: '마법 도구', fairyPrompt: '위험한 순간에 힘을 발휘할 신비한 마법 지팡이나 특별한 도구를 그려줘!', icon: Icons.auto_awesome, emoji: '🪄', color: Color(0xFFC9684B)),
+    StoryCategory(id: 'place', title: '비밀 장소', fairyPrompt: '모험이 펼쳐질 장소를 그려줘! 우리 집, 마법의 성, 신비한 숲도 좋아.', icon: Icons.castle, emoji: '🏰', color: Color(0xFF4F93C2)),
+    StoryCategory(id: 'vehicle', title: '특별한 탈것', fairyPrompt: '하늘을 나는 양탄자, 우주선, 구름 자전거처럼 신나는 탈것을 그려볼래?', icon: Icons.rocket_launch, emoji: '🚀', color: Color(0xFFE0A126)),
+    StoryCategory(id: 'villain', title: '엉뚱한 악당', fairyPrompt: '이야기를 더 흥미진진하게 만들 귀여운 장난꾸러기 악당을 그려보자!', icon: Icons.mood_bad, emoji: '😈', color: Color(0xFF8A7360)),
+    StoryCategory(id: 'food', title: '좋아하는 간식', fairyPrompt: '먹으면 힘이 솟아나는 달콤한 케이크나 마법 열매를 그려보는 건 어때?', icon: Icons.icecream, emoji: '🍰', color: Color(0xFFEE8C6E)),
+    StoryCategory(id: 'treasure', title: '숨겨진 보물', fairyPrompt: '모험의 끝에서 발견할 반짝이는 보물 상자나 비밀 열쇠를 그려보자!', icon: Icons.vpn_key, emoji: '💎', color: Color(0xFF5E9E4A)),
   ];
 
   CreationStage _stage = CreationStage.choosing;
@@ -131,7 +132,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   final List<DrawingPath> _paths = [];
   final List<DrawingPath> _redoStack = [];
   DrawingPath? _currentPath;
-  Color _selectedColor = const Color(0xFF2B2A4C);
+  Color _selectedColor = const Color(0xFF4A3728);
   int _penLevel = 1;
   int _eraserLevel = 1;
   static const List<double> _penSizes = [4.0, 8.0, 14.0];
@@ -162,8 +163,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   Map<String, dynamic>? _cachedStoryData;
 
   final List<Color> _colorPalette = const [
-    Color(0xFF2B2A4C),
-    Color(0xFFFF4D4D),
+    Color(0xFF4A3728),
+    Color(0xFFEE8C6E),
     Color(0xFFFF9F1C),
     Color(0xFFFFD93D),
     Color(0xFF6BCB77),
@@ -261,7 +262,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       _stage = CreationStage.askCustomWhat;
       _pendingCustomName = null;
     });
-    _addLumi('좋아! 무엇을 그리고 싶어?\n말하거나 글로 써줘 ✨');
+    _addLumi('좋아! 무엇을 그리고 싶어?\n말하거나 글로 써줘');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _inputFocusNode.requestFocus();
     });
@@ -304,8 +305,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       title: trimmedRole,
       fairyPrompt: '좋아! $trimmedRole "$subject"을(를) 멋지게 그려보자 🎨',
       icon: Icons.auto_awesome,
-      emoji: '✨',
-      color: const Color(0xFF7E57C2),
+      emoji: '',
+      color: const Color(0xFF5E9E4A),
     );
 
     // 3. 카테고리 목록에 추가하고 바로 캔버스 열기
@@ -354,9 +355,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
       // 보관함에서 줄거리를 들고 온 경우 환영 멘트 분기
       if (widget.initialStoryData != null) {
-        _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐 ✨');
+        _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐');
       } else {
-        _addLumi('안녕? 나는 이야기 요정 루미야 ✨\n우리 같이 동화를 만들어보자~\n먼저 뭐부터 그릴래?');
+        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n먼저 뭐부터 그릴래?');
       }
     });
   }
@@ -560,7 +561,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       debugPrint('루미 API 통신 오류: $e');
       if (!mounted) return;
       setState(() => _isLumiThinking = false);
-      _addLumi('"$q"라니 정말 기발해! 동화 속에서는 무엇이든 마법처럼 가능하니까 자유롭게 그려봐! 🎨✨');
+      _addLumi('"$q"라니 정말 기발해! 동화 속에서는 무엇이든 마법처럼 가능하니까 자유롭게 그려봐! 🎨');
     }
   }
 
@@ -622,7 +623,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             title: raw['title'] ?? '친구',
             fairyPrompt: raw['fairyPrompt'] ?? '',
             icon: Icons.auto_awesome,
-            emoji: raw['emoji'] ?? '✨',
+            emoji: raw['emoji'] ?? '',
             color: Color(raw['color'] ?? 0xFF7E57C2),
           ));
         }
@@ -928,8 +929,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     setState(() => _stage = CreationStage.askName);
     final existing = _slotDescriptions[cat.id]?['name'];
     _addLumi(existing != null && existing.isNotEmpty
-        ? '정말 멋지게 그렸어! ✨\n이름은 그대로 "$existing"(으)로 할까, 아니면 새 이름을 알려줄래?'
-        : '정말 멋지게 그렸어! ✨\n이 ${cat.title}의 이름은 뭐야?');
+        ? '정말 멋지게 그렸어!\n이름은 그대로 "$existing"(으)로 할까, 아니면 새 이름을 알려줄래?'
+        : '정말 멋지게 그렸어!\n이 ${cat.title}의 이름은 뭐야?');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _inputFocusNode.requestFocus();
     });
@@ -955,7 +956,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       'name': _slotDescriptions[id]?['name'] ?? _catById(id).title,
       'desc': skip ? (_slotDescriptions[id]?['desc'] ?? '') : desc,
     };
-    final prefix = skip ? '알겠어! ' : '알려줘서 고마워! 루미가 꼭 기억할게 ✨\n';
+    final prefix = skip ? '알겠어! ' : '알려줘서 고마워! 크레용이 꼭 기억할게\n';
     final moment = _storyMomentAfter(id);
     if (moment == null) {
       await _goChoosing(prefix: prefix);
@@ -1099,7 +1100,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       final pool = _hintPoolFor(key);
       finalAnswer = pool[_random.nextInt(pool.length)];
     }
-    _addChild(byLumi ? '루미가 정해줘!' : answer);
+    _addChild(byLumi ? '크레용이 정해줘!' : answer);
 
     if (_inFollowUp) {
       final prev = _storyNotes[key];
@@ -1133,7 +1134,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       return;
     }
 
-    final reaction = byLumi ? '루미는 "$finalAnswer"(이)가 좋을 것 같아! ' : '좋아, "$finalAnswer"! ';
+    final reaction = byLumi ? '크레용은 "$finalAnswer"(이)가 좋을 것 같아! ' : '좋아, "$finalAnswer"! ';
     await _finishStoryMoment(key, reaction);
   }
 
@@ -1145,7 +1146,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     });
     if (key == _endingKey) {
       setState(() => _stage = CreationStage.choosing);
-      _addLumi('$reaction\n그럼 우리가 정한 이야기로 동화를 만들어볼게 ✨');
+      _addLumi('$reaction\n그럼 우리가 정한 이야기로 동화를 만들어볼게');
       await Future.delayed(const Duration(milliseconds: 900));
       if (mounted) _proceedToStoryReview();
       return;
@@ -1200,8 +1201,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       _slotAiDelegated[cat.id] = true;
       _slotDescriptions[cat.id] = {'name': '${_customSubject[cat.id] ?? cat.title} (AI 생성)', 'desc': '요정이 대신 상상해서 그릴 예정'};
     });
-    _addChild('루미가 대신 그려줘!');
-    await _goChoosing(prefix: '${cat.title}은(는) 루미가 마법으로 그려줄게! ✨\n');
+    _addChild('크레용이 대신 그려줘!');
+    await _goChoosing(prefix: '${cat.title}은(는) 크레용이 마법으로 그려줄게!\n');
   }
 
   void _clearCanvas() {
@@ -1227,7 +1228,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('동화의 대장인 주인공은 삭제할 수 없어! 🧒'),
-          backgroundColor: Color(0xFFE53935),
+          backgroundColor: Color(0xFFD9604F),
         ),
       );
       return;
@@ -1248,7 +1249,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         ),
         content: Text(
           '\'${_labelOf(id)}\' 그림을 정말 지울까?\n지우면 처음부터 다시 그려야 해! 😢',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF4A4458), height: 1.5),
+          style: const TextStyle(fontSize: 14, color: Color(0xFF4A3728), height: 1.5),
         ),
         actions: [
           TextButton(
@@ -1299,7 +1300,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     await _persistSlotPng(id, null);
     await _persistAllMetadata();
 
-    _addLumi('\'${cat.title}\' 그림을 지웠어! 다른 걸 골라보자 ✨');
+    _addLumi('\'${cat.title}\' 그림을 지웠어! 다른 걸 골라보자');
   }
 
   Future<void> _proceedToStoryReview() async {
@@ -1314,7 +1315,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     if (!hasHero) {
       const warnText = '이야기의 대장이 될 주인공은 꼭 직접 그려줘야 해! 🎨';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(warnText), backgroundColor: Color(0xFFE53935)),
+        const SnackBar(content: Text(warnText), backgroundColor: Color(0xFFD9604F)),
       );
       await _selectCategory('hero', fromChip: false, announce: false);
       _addLumi(warnText);
@@ -1393,7 +1394,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         ),
         content: const Text(
           '지금 나가면 정성껏 그린 그림과 이야기가 모두 사라져요.\n정말 나갈까요? 😢',
-          style: TextStyle(fontSize: 14, color: Color(0xFF4A4458), height: 1.5),
+          style: TextStyle(fontSize: 14, color: Color(0xFF4A3728), height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
@@ -1440,13 +1441,13 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
 
 
-  static const Color _ink = Color(0xFF2B2A4C);
-  static const Color _sub = Color(0xFF8A86A8);
-  static const Color _purpleDark = Color(0xFF5B2FE0);
-  static const Color _yellow = Color(0xFFFFC93C);
-  static const Color _green = Color(0xFF58CC02);
-  static const Color _cardLine = Color(0xFFEAE6F8);
-  static const Color _cardEdge = Color(0xFFDCD5F3);
+  static const Color _ink = AppColors.textPrimary;
+  static const Color _sub = AppColors.textSecondary;
+  static const Color _purpleDark = Color(0xFF457A36);
+  static const Color _yellow = AppColors.primary;
+  static const Color _green = Color(0xFF6FB043);
+  static const Color _cardLine = AppColors.border;
+  static const Color _cardEdge = Color(0xFFE6D3AE);
 
   Color _darken(Color c, [double amount = 0.16]) {
     final hsl = HSLColor.fromColor(c);
@@ -1490,13 +1491,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), offset: const Offset(0, 3))],
       ),
       child: ClipOval(
-        child: Image.asset(
-          _lumiImagePath,
-          fit: BoxFit.cover,
-          errorBuilder: (ctx, err, stack) => Container(
-            color: _purple,
-            child: Icon(Icons.face_retouching_natural, color: Colors.white, size: size * 0.55),
-          ),
+        child: Container(
+          color: AppColors.secondaryLight,
+          padding: EdgeInsets.all(size * 0.06),
+          child: Image.asset(_lumiImagePath, fit: BoxFit.contain),
         ),
       ),
     );
@@ -1504,7 +1502,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
   ThemeData _kidsTheme(BuildContext context) {
     final base = Theme.of(context);
-    final String? kidsFont = GoogleFonts.jua().fontFamily;
+    final String? kidsFont = GoogleFonts.poorStory().fontFamily;
     return base.copyWith(
       textTheme: base.textTheme.apply(fontFamily: kidsFont, bodyColor: _ink, displayColor: _ink),
       primaryTextTheme: base.primaryTextTheme.apply(fontFamily: kidsFont),
@@ -1524,7 +1522,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           });
         },
         child: Scaffold(
-          backgroundColor: const Color(0xFFB8E6FF),
+          backgroundColor: const Color(0xFFFFF3DC),
           body: Stack(
             children: [
               Positioned.fill(
@@ -1595,7 +1593,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             child: Container(
               width: 48,
               height: 48,
-              decoration: _chunky(color: Colors.white, edge: const Color(0xFF9FCDEB), shape: BoxShape.circle, depth: 4),
+              decoration: _chunky(color: Colors.white, edge: const Color(0xFFE6D3AE), shape: BoxShape.circle, depth: 4),
               child: const Icon(Icons.arrow_back_rounded, size: 26, color: _ink),
             ),
           ),
@@ -1616,8 +1614,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                     shadows: [Shadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(0, 2))],
                   ),
                 ),
-                const Text('루미랑 이야기하며 그림을 그려요 ✨',
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: Color(0xFF4A6A8A))),
+                const Text('크레용이랑 이야기하며 그림을 그려요',
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: Color(0xFF8A7360))),
               ],
             ),
           ),
@@ -1629,13 +1627,13 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: ready
                   ? _chunky(color: _yellow, radius: 30, depth: 5)
-                  : _chunky(color: const Color(0xFFE6E2EF), radius: 30, depth: 5),
+                  : _chunky(color: const Color(0xFFF1E3C8), radius: 30, depth: 5),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text('📖', style: TextStyle(fontSize: 18)),
                   const SizedBox(width: 8),
-                  Text('이야기 짓기', style: TextStyle(fontSize: 17, color: ready ? _ink : const Color(0xFFA9A3BC))),
+                  Text('이야기 짓기', style: TextStyle(fontSize: 17, color: ready ? _ink : const Color(0xFFBFAE9C))),
                 ],
               ),
             ),
@@ -1668,7 +1666,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             _buildChatHeader(),
             Expanded(
               child: Container(
-                color: const Color(0xFFF8F6FF),
+                color: const Color(0xFFFFFDF7),
                 child: ListView(
                   controller: _chatScrollCtrl,
                   padding: const EdgeInsets.fromLTRB(14, 16, 14, 10),
@@ -1697,13 +1695,13 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     final cat = currentCat;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-      color: _purple,
+      decoration: const BoxDecoration(
+        color: AppColors.secondaryLight,
+        border: Border(bottom: BorderSide(color: Color(0xFFBFDDA5), width: 2)),
+      ),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned(right: 60, top: -6, child: Text('✦', style: TextStyle(fontSize: 18, color: Colors.white.withValues(alpha: 0.35)))),
-          Positioned(right: 96, bottom: -8, child: Text('✦', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.3)))),
-          Positioned(left: 150, top: -4, child: Text('✦', style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.3)))),
           Row(
             children: [
               AnimatedBuilder(
@@ -1717,11 +1715,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('요정 루미', style: TextStyle(fontSize: 20, color: Colors.white)),
+                    Text('크레용', style: AppTextStyles.headingMedium()),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1730,7 +1728,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                             height: 8,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _isLumiThinking ? _yellow : const Color(0xFF7CFF8A),
+                              color: _isLumiThinking ? _yellow : AppColors.secondaryDark,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -1743,7 +1741,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                                       : '${cat.emoji} ${_labelOf(cat.id)} 그리는 중',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13, color: Colors.white),
+                              style: const TextStyle(fontSize: 14, color: Color(0xFF3E6F2E)),
                             ),
                           ),
                         ],
@@ -1788,14 +1786,14 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isLumi ? Colors.white : _purple,
+            color: isLumi ? Colors.white : AppColors.primaryLight,
             borderRadius: radius,
-            border: isLumi ? Border.all(color: _cardLine, width: 2) : null,
-            boxShadow: [BoxShadow(color: isLumi ? _cardEdge : _purpleDark, offset: const Offset(0, 3))],
+            border: Border.all(color: isLumi ? _cardLine : AppColors.primary, width: 2),
+            boxShadow: [BoxShadow(color: isLumi ? _cardEdge : AppColors.primaryDark, offset: const Offset(0, 3))],
           ),
           child: Text(
             m.text,
-            style: TextStyle(fontSize: 17, height: 1.45, color: isLumi ? _ink : Colors.white),
+            style: AppTextStyles.bodyLarge(color: _ink).copyWith(fontSize: 17, height: 1.5),
           ),
         ),
       ),
@@ -1836,7 +1834,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               animation: _fairyAnimController,
               builder: (context, _) {
                 final t = _fairyAnimController.value;
-                const dots = [Color(0xFFFF6FB5), _yellow, Color(0xFF4D96FF)];
+                const dots = [Color(0xFFEE8C6E), _yellow, Color(0xFF6FB043)];
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: List.generate(3, (i) {
@@ -1875,7 +1873,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           if (_currentId != null)
             QuickReply(label: '${_labelOf(_currentId!)} 계속 그릴래', emoji: '🖍️', onTap: _continueDrawing),
           if (_remainingCategories.isNotEmpty)
-            QuickReply(label: '내가 정할래!', emoji: '✏️', color: const Color(0xFFFF6FB5), primary: true, onTap: _startCustom),
+            QuickReply(label: '내가 정할래!', emoji: '✏️', color: const Color(0xFFEE8C6E), primary: true, onTap: _startCustom),
           if (_heroDrawn)
             QuickReply(
               label: '동화 만들기',
@@ -1892,20 +1890,20 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         final hasDrawing = _paths.isNotEmpty || (cat != null && (_restoredBasePng[cat.id] != null || _slotPngBytes[cat.id] != null));
         return [
           QuickReply(label: '다 그렸어!', emoji: '✅', color: _green, primary: true, onTap: hasDrawing ? _startNaming : null),
-          QuickReply(label: '어떤 색이 어울릴까?', emoji: '🎨', color: const Color(0xFFFF6FB5), onTap: () => _sendQuestionToLumi('어떤 색이 어울릴까?')),
+          QuickReply(label: '어떤 색이 어울릴까?', emoji: '🎨', color: const Color(0xFFEE8C6E), onTap: () => _sendQuestionToLumi('어떤 색이 어울릴까?')),
           QuickReply(
             label: '그리기 너무 어려워!',
             emoji: '🥺',
-            color: const Color(0xFF4D96FF),
+            color: const Color(0xFF4F93C2),
             onTap: () {
               _addChild('그리기 너무 어려워!');
               _addLumi('완벽하지 않아도 괜찮아! 동그라미랑 네모만 이어 붙여도 멋진 작품이 된단다 🎨');
             },
           ),
           if (cat != null && !cat.isRequired)
-            QuickReply(label: '루미가 대신 그려줘', emoji: '🪄', color: const Color(0xFF9B5DE5), onTap: _delegateToAi),
+            QuickReply(label: '크레용이 대신 그려줘', emoji: '🪄', color: const Color(0xFF5E9E4A), onTap: _delegateToAi),
           if (_remainingCategories.isNotEmpty)
-            QuickReply(label: '다른 거 그릴래', emoji: '🔄', color: const Color(0xFFFF9F1C), onTap: () => _goChoosing(childSays: '다른 거 그릴래!')),
+            QuickReply(label: '다른 거 그릴래', emoji: '🔄', color: const Color(0xFFE0A126), onTap: () => _goChoosing(childSays: '다른 거 그릴래!')),
         ];
       case CreationStage.askName:
         final existing = cat == null ? null : _slotDescriptions[cat.id]?['name'];
@@ -1914,21 +1912,21 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             QuickReply(label: '"$existing" 그대로 할래', emoji: '👍', color: _green, primary: true, onTap: () => _receiveName(existing))
           else if (cat != null)
             QuickReply(label: '그냥 "${cat.title}"(으)로 할래', emoji: '👍', color: _green, onTap: () => _receiveName(cat.title)),
-          QuickReply(label: '더 그릴래', emoji: '🖍️', color: const Color(0xFFFF9F1C), onTap: _handleSmartBack),
+          QuickReply(label: '더 그릴래', emoji: '🖍️', color: const Color(0xFFE0A126), onTap: _handleSmartBack),
         ];
       case CreationStage.askDesc:
         return [
-          QuickReply(label: '없어, 넘어갈래', emoji: '⏭️', color: const Color(0xFF4D96FF), onTap: () => _receiveDesc('', skip: true)),
+          QuickReply(label: '없어, 넘어갈래', emoji: '⏭️', color: const Color(0xFF4F93C2), onTap: () => _receiveDesc('', skip: true)),
         ];
       case CreationStage.askCustomWhat:
         return [
-          QuickReply(label: '그만할래', emoji: '↩️', color: const Color(0xFF9E9E9E), onTap: _handleSmartBack),
+          QuickReply(label: '그만할래', emoji: '↩️', color: const Color(0xFFBFAE9C), onTap: _handleSmartBack),
         ];
       case CreationStage.askCustomRole:
         return [
           for (final c in _remainingCategories)
             QuickReply(label: c.title, emoji: c.emoji, color: c.color, onTap: () => _assignCustom(c.id)),
-          QuickReply(label: '다시 정할래', emoji: '✏️', color: const Color(0xFFFF6FB5), onTap: () {
+          QuickReply(label: '다시 정할래', emoji: '✏️', color: const Color(0xFFEE8C6E), onTap: () {
             _addChild('다시 정할래!');
             setState(() {
               _pendingCustomName = null;
@@ -1948,11 +1946,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         }
         if (!_showHints) {
           return [
-            QuickReply(label: '잘 모르겠어', emoji: '🤔', color: const Color(0xFFFF9F1C), onTap: _showStoryHints),
+            QuickReply(label: '잘 모르겠어', emoji: '🤔', color: const Color(0xFFE0A126), onTap: _showStoryHints),
             QuickReply(
               label: key == _endingKey ? '그림 더 그릴래' : '넘어갈래',
               emoji: key == _endingKey ? '🖍️' : '⏭️',
-              color: const Color(0xFF9E9E9E),
+              color: const Color(0xFFBFAE9C),
               onTap: _skipStory,
             ),
           ];
@@ -1961,7 +1959,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         return [
           for (final hint in _currentHints)
             QuickReply(label: hint, emoji: '💡', color: accent, onTap: () => _answerStory(hint, fromHint: true)),
-          QuickReply(label: '루미가 정해줘', emoji: '🎲', color: _purple, primary: true, onTap: () => _answerStory('', byLumi: true)),
+          QuickReply(label: '크레용이 정해줘', emoji: '🎲', color: _purple, primary: true, onTap: () => _answerStory('', byLumi: true)),
         ];
     }
   }
@@ -1983,8 +1981,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     final BoxDecoration deco;
     final Color fg;
     if (!enabled) {
-      deco = _chunky(color: const Color(0xFFF0EDF6), edge: const Color(0xFFDCD7E6), radius: 30, depth: 4);
-      fg = const Color(0xFFB5AEC4);
+      deco = _chunky(color: const Color(0xFFFFF3DC), edge: const Color(0xFFE6D3AE), radius: 30, depth: 4);
+      fg = const Color(0xFFBFAE9C);
     } else if (r.primary) {
       deco = _chunky(color: accent, radius: 30, depth: 4);
       fg = _onColor(accent);
@@ -2022,7 +2020,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             ? '내 생각을 말해줘! 💭'
             : _stage == CreationStage.askDesc
                 ? '어떤 특별한 점이 있는지 알려줘!'
-                : '루미에게 말해봐!';
+                : '크레용에게 말해봐!';
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
       color: Colors.white,
@@ -2031,9 +2029,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF6F4FC),
+                color: const Color(0xFFFFFDF7),
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: _isListening ? const Color(0xFFFF4D4D) : _cardLine, width: 2.5),
+                border: Border.all(color: _isListening ? const Color(0xFFEE8C6E) : _cardLine, width: 2.5),
               ),
               child: Row(
                 children: [
@@ -2048,7 +2046,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                       style: const TextStyle(fontSize: 17, color: _ink),
                       decoration: InputDecoration(
                         hintText: hint,
-                        hintStyle: TextStyle(fontSize: 16, color: _isListening ? const Color(0xFFFF4D4D) : const Color(0xFFB0AAC6)),
+                        hintStyle: TextStyle(fontSize: 16, color: _isListening ? const Color(0xFFEE8C6E) : const Color(0xFFBFAE9C)),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.fromLTRB(18, 13, 8, 13),
                       ),
@@ -2086,9 +2084,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _isListening ? const Color(0xFFFF4D4D) : _tint(_purple, 0.85),
+              color: _isListening ? const Color(0xFFEE8C6E) : _tint(_purple, 0.85),
               boxShadow: _isListening
-                  ? [BoxShadow(color: const Color(0xFFFF4D4D).withValues(alpha: 0.35), blurRadius: 6 + 10 * pulse, spreadRadius: 3 * pulse)]
+                  ? [BoxShadow(color: const Color(0xFFEE8C6E).withValues(alpha: 0.35), blurRadius: 6 + 10 * pulse, spreadRadius: 3 * pulse)]
                   : [],
             ),
             child: child,
@@ -2127,7 +2125,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   height: 14,
                   padding: const EdgeInsets.all(2.5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1EEF8),
+                    color: const Color(0xFFFFF3DC),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: LayoutBuilder(
@@ -2138,7 +2136,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         curve: Curves.easeOutBack,
                         width: count == 0 ? 0 : (c.maxWidth * (count / total)),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFFFFD93D), Color(0xFFFF9F1C)]),
+                          gradient: const LinearGradient(colors: [Color(0xFFF8C03C), Color(0xFFE0A126)]),
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
@@ -2162,7 +2160,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1EEF8),
+                    color: const Color(0xFFFFF3DC),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -2200,7 +2198,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFFFE7A3), width: 2),
                       ),
-                      child: const Text('그린 그림이 여기에 모여요 ✨\n눌러서 언제든 다시 고칠 수 있어!',
+                      child: const Text('그린 그림이 여기에 모여요\n눌러서 언제든 다시 고칠 수 있어!',
                           textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFFB88A1E), height: 1.4)),
                     )
                         : ListView.separated(
@@ -2231,7 +2229,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
         decoration: _chunky(
-          color: count > 0 ? const Color(0xFFFFF4D6) : const Color(0xFFF1EEF8),
+          color: count > 0 ? const Color(0xFFFFF4D6) : const Color(0xFFFFF3DC),
           edge: count > 0 ? const Color(0xFFF2C94C) : _cardEdge,
           radius: 16,
           depth: 3,
@@ -2281,7 +2279,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                           child: Container(
                             width: 40,
                             height: 40,
-                            decoration: _chunky(color: const Color(0xFFF1EEF8), edge: _cardEdge, shape: BoxShape.circle, depth: 3),
+                            decoration: _chunky(color: const Color(0xFFFFF3DC), edge: _cardEdge, shape: BoxShape.circle, depth: 3),
                             child: const Icon(Icons.close_rounded, color: _sub),
                           ),
                         ),
@@ -2292,14 +2290,14 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                     padding: EdgeInsets.symmetric(horizontal: 22),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('루미랑 이야기하면서 정한 내용이 동화에 들어가요!', style: TextStyle(fontSize: 14, color: _sub)),
+                      child: Text('크레용이랑 이야기하면서 정한 내용이 동화에 들어가요!', style: TextStyle(fontSize: 14, color: _sub)),
                     ),
                   ),
                   const SizedBox(height: 12),
                   if (notes.isEmpty)
                     const Padding(
                       padding: EdgeInsets.fromLTRB(22, 20, 22, 36),
-                      child: Text('아직 정한 이야기가 없어요.\n그림을 완성하면 루미가 물어볼 거야 ✨',
+                      child: Text('아직 정한 이야기가 없어요.\n그림을 완성하면 크레용이 물어볼 거야',
                           textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: _sub, height: 1.5)),
                     )
                   else
@@ -2336,7 +2334,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                                       if (n.byLumi)
                                         const Padding(
                                           padding: EdgeInsets.only(top: 2),
-                                          child: Text('🎲 루미가 골랐어요', style: TextStyle(fontSize: 12, color: _sub)),
+                                          child: Text('🎲 크레용이 골랐어요', style: TextStyle(fontSize: 12, color: _sub)),
                                         ),
                                     ],
                                   ),
@@ -2349,7 +2347,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                                   child: const SizedBox(
                                     width: 40,
                                     height: 40,
-                                    child: Icon(Icons.close_rounded, size: 20, color: Color(0xFFB0AAC0)),
+                                    child: Icon(Icons.close_rounded, size: 20, color: Color(0xFFBFAE9C)),
                                   ),
                                 ),
                               ],
@@ -2534,7 +2532,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               children: [
                 // ── 🌐 작업대(Desk) & 100% 꽉 찬 인터랙티브 도화지 ──
                 Container(
-                  color: const Color(0xFFEDEAF6), // 줌아웃 시 드러나는 작업대 배경색
+                  color: const Color(0xFFFFF3DC), // 줌아웃 시 드러나는 작업대 배경색
                   child: InteractiveViewer(
                     transformationController: _transformCtrl,
                     constrained: false, // 👈 [추가 2] 화면 크기로 강제 압축되는 현상 차단!
@@ -2550,10 +2548,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
                         // 🎯 [경계선] 도화지 가장자리에 둘러진 뚜렷한 보라색 외곽선 & 입체 그림자
-                        border: Border.all(color: const Color(0xFF7E57C2), width: 3.5),
+                        border: Border.all(color: const Color(0xFF5E9E4A), width: 3.5),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF2E1A47).withOpacity(0.16),
+                            color: const Color(0xFF4A3728).withOpacity(0.16),
                             blurRadius: 24,
                             spreadRadius: 3,
                             offset: const Offset(0, 8),
@@ -2632,7 +2630,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                           children: [
                             const Text('🪄', style: TextStyle(fontSize: 44)),
                             const SizedBox(height: 10),
-                            Text('루미가 ${cat.title}을(를) 대신 그려줄 거야!', style: const TextStyle(fontSize: 18, color: _ink)),
+                            Text('크레용이 ${cat.title}을(를) 대신 그려줄 거야!', style: const TextStyle(fontSize: 18, color: _ink)),
                             const SizedBox(height: 4),
                             const Text('직접 그리고 싶다면 바로 그려 봐 🎨', style: TextStyle(fontSize: 14, color: _sub)),
                           ],
@@ -2725,21 +2723,21 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
                         decoration: hasCanvasDrawing
                             ? _chunky(color: _green, radius: 30, depth: 5)
-                            : _chunky(color: const Color(0xFFE6E2EF), radius: 30, depth: 5),
+                            : _chunky(color: const Color(0xFFF1E3C8), radius: 30, depth: 5),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               Icons.check_rounded,
                               size: 22,
-                              color: hasCanvasDrawing ? Colors.white : const Color(0xFFB0AAC0),
+                              color: hasCanvasDrawing ? Colors.white : const Color(0xFFBFAE9C),
                             ),
                             const SizedBox(width: 6),
                             Text(
                               '다 그렸어!',
                               style: TextStyle(
                                 fontSize: 18,
-                                color: hasCanvasDrawing ? Colors.white : const Color(0xFFB0AAC0),
+                                color: hasCanvasDrawing ? Colors.white : const Color(0xFFBFAE9C),
                               ),
                             ),
                           ],
@@ -2775,7 +2773,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               const SizedBox(height: 20),
               const Text('무엇을 그려볼까?', style: TextStyle(fontSize: 26, color: _ink)),
               const SizedBox(height: 6),
-              const Text('루미의 말풍선 아래 버튼을 골라줘!', style: TextStyle(fontSize: 16, color: _sub)),
+              const Text('크레용의 말풍선 아래 버튼을 골라줘!', style: TextStyle(fontSize: 16, color: _sub)),
             ],
           ),
         ),
@@ -2784,7 +2782,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   }
 
   Widget _canvasIconButton(IconData icon, VoidCallback? onTap, {bool danger = false}) {
-    final color = onTap == null ? const Color(0xFFD5CFE2) : (danger ? const Color(0xFFFF4D4D) : _ink);
+    final color = onTap == null ? const Color(0xFFE6D3AE) : (danger ? const Color(0xFFEE8C6E) : _ink);
     return _Pressable(
       onTap: onTap,
       child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 22, color: color)),
@@ -2819,7 +2817,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   Widget _toolToggle() {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: const Color(0xFFF1EEF8), borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(color: const Color(0xFFFFF3DC), borderRadius: BorderRadius.circular(24)),
       child: Row(
         children: [
           _toolSegment('🖍️', '펜', !_isEraser && !_isPanMode, () {
@@ -2883,7 +2881,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           height: dot,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _isEraser ? const Color(0xFFCFC8DD) : _selectedColor,
+            color: _isEraser ? const Color(0xFFE6D3AE) : _selectedColor,
           ),
         ),
       ),
@@ -3027,7 +3025,7 @@ class _KidsScenePainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF7CCBFF), Color(0xFFB8E6FF), Color(0xFFE8F8FF)],
+          colors: [Color(0xFFFFE9A8), Color(0xFFFFF3DC), Color(0xFFFFF9EE)],
           stops: [0.0, 0.55, 1.0],
         ).createShader(rect),
     );
@@ -3105,7 +3103,7 @@ class _DotGridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFFEDE9F7);
+    final paint = Paint()..color = const Color(0xFFF1E3C8);
     const gap = 26.0;
     for (double y = gap / 2; y < size.height; y += gap) {
       for (double x = gap / 2; x < size.width; x += gap) {

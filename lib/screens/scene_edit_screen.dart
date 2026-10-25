@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/crayong_widgets.dart';
 import 'fairy_tale_list_screen.dart';
 import 'tale_reading_screen.dart';
 import 'ai_result_screen.dart';
 import '../services/api_service.dart';
-
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:lottie/lottie.dart';
 
 class HighlightRange {
   final int start;
@@ -86,14 +85,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   DrawingPath? _currentPath;
   final GlobalKey _sketchKey = GlobalKey();
 
-  // [병규 튜토리얼] 코치마크 타깃 지정을 위한 GlobalKey 3개
-  final GlobalKey _textSelectionKey = GlobalKey();
-  final GlobalKey _canvasKey = GlobalKey();
-  final GlobalKey _previewButtonKey = GlobalKey();
-  TutorialCoachMark? _tutorialCoachMark;
-  List<TargetFocus> _targets = [];
-
-  Color _selectedColor = Colors.black;
+  Color _selectedColor = const Color(0xFF3B2F27);
   double _strokeWidth = 12.0;
   bool _isEraser = false;
 
@@ -119,55 +111,22 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   String? _progressMessage;
   Timer? _progressTimer;
 
-  final List<Color> _colorPalette = [
-    Colors.black,
-    const Color(0xFFE53935),
-    const Color(0xFFFF8F00),
-    const Color(0xFFFFD600),
-    const Color(0xFF43A047),
-    const Color(0xFF1E88E5),
-    const Color(0xFF5E35B1),
-    const Color(0xFF795548),
-    const Color(0xFFEC407A),
+  final List<Color> _colorPalette = const [
+    Color(0xFF3B2F27),
+    Color(0xFFE53935),
+    Color(0xFFFF8F00),
+    Color(0xFFFFD600),
+    Color(0xFF43A047),
+    Color(0xFF1E88E5),
+    Color(0xFF5E35B1),
+    Color(0xFF795548),
+    Color(0xFFEC407A),
   ];
 
   @override
   void initState() {
     super.initState();
     _initText();
-
-    // [병규 수정 | 2026-09-20] 첫 화면 빌드 및 렌더링이 완전히 끝난 직후 튜토리얼 노출 여부 체크
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndShowTutorial();
-    });
-  }
-
-  Future<void> _checkAndShowTutorial({bool force = false}) async {
-    // [추가] 화면 위젯 레이아웃이 100% 안정화될 때까지 300ms 대기
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final bool isTutorialSeen = prefs.getBool('is_scene_tutorial_seen') ?? false;
-
-    // 💡 [수정] true 제거 -> 최초 1회만 노출되도록 조건식 복원
-    if (!isTutorialSeen || force) {
-      _initTutorialTargets();
-      _tutorialCoachMark = TutorialCoachMark(
-        targets: _targets,
-        colorShadow: const Color(0xFF2D3436),
-        textSkip: "건너뛰기",
-        paddingFocus: 8,
-        opacityShadow: 0.8,
-        onFinish: () async {
-          await prefs.setBool('is_scene_tutorial_seen', true);
-        },
-        onSkip: () {
-          prefs.setBool('is_scene_tutorial_seen', true);
-          return true;
-        },
-      )..show(context: context);
-    }
   }
 
   void _initText() {
@@ -198,6 +157,23 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     return false;
   }
 
+  void _showMessage(String text, {String image = CrayongImages.wink}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Image.asset(image, width: 30, height: 30),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: AppTextStyles.labelLarge(color: Colors.white))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _friendlyError(Object e, String fallback) => kDebugMode ? '$fallback\n$e' : fallback;
+
   List<String>? _extractGeneratedImagePaths(Map<String, dynamic> result) {
     final candidates = [
       result['generated_image_paths'],
@@ -216,9 +192,10 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   }
 
   String _changedPagesSummary() {
-    if (_previewRevisedPages == null || _previewRevisedPages!.isEmpty)
+    if (_previewRevisedPages == null || _previewRevisedPages!.isEmpty) {
       return '';
-    final startPage = 1;
+    }
+    const startPage = 1;
     final endPage = _previewRevisedPages!.length;
     return startPage == endPage ? '$startPage페이지' : '$startPage~$endPage페이지';
   }
@@ -236,9 +213,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
             (start <= h.start && end >= h.end),
       );
 
-      _highlights.add(
-        HighlightRange(start: start, end: end, text: selectedText),
-      );
+      _highlights.add(HighlightRange(start: start, end: end, text: selectedText));
     });
   }
 
@@ -264,8 +239,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   }
 
   Future<Uint8List> _captureSketchBytes() async {
-    final boundary =
-        _sketchKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final boundary = _sketchKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 2.0);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
@@ -273,23 +247,17 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
 
   Future<void> _generatePreviewFlow() async {
     if (widget.tale.storyId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('서버 동화만 수정할 수 있어요.')));
+      _showMessage('서버에 있는 동화만 바꿀 수 있어요.', image: CrayongImages.surprised);
       return;
     }
 
     if (_highlights.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('먼저 바꾸고 싶은 텍스트를 드래그해서 선택해주세요.')),
-      );
+      _showMessage('먼저 바꾸고 싶은 문장을 손가락으로 쭉 칠해 줘요.', image: CrayongImages.surprised);
       return;
     }
 
     if (!_hasSketch) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('먼저 그림판에 낙서를 그려주세요.')));
+      _showMessage('그림판에 바꾸고 싶은 장면을 그려 줘요.', image: CrayongImages.painter);
       return;
     }
 
@@ -308,8 +276,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     try {
       final sketchBytes = await _captureSketchBytes();
       final selectedText = _selectedTextForApi;
-      final pageNumber =
-          widget.taleBook.pages[widget.selectedPageIndex].pageNumber;
+      final pageNumber = widget.taleBook.pages[widget.selectedPageIndex].pageNumber;
 
       final interpretResult = await ApiService.sketchInterpret(
         storyId: widget.tale.storyId!,
@@ -318,16 +285,16 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
         sketchBytes: sketchBytes,
       );
 
-      final interpreted =
-          interpretResult['interpreted_request'] as String? ?? '';
+      final interpreted = interpretResult['interpreted_request'] as String? ?? '';
 
+      if (!mounted) return;
       setState(() {
         _interpretedRequest = interpreted;
         _chatMessages.add({
           'role': 'ai',
           'text': interpreted.isEmpty
-              ? '낙서 해석 결과를 만들지 못했어요.'
-              : '이렇게 이해했어요:\n$interpreted',
+              ? '앗, 그림을 잘 못 알아봤어요. 조금 더 크게 그려 줄래요?'
+              : '크레용은 이렇게 이해했어요!\n$interpreted',
         });
       });
 
@@ -338,31 +305,25 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
         confirmedRequest: interpreted,
       );
 
-      final revisedPages = (previewResult['revised_pages'] as List<dynamic>)
-          .map((e) => e.toString())
-          .toList();
-
-      final originalPages = (previewResult['original_pages'] as List<dynamic>)
-          .map((e) => e.toString())
-          .toList();
-
+      final revisedPages = (previewResult['revised_pages'] as List<dynamic>).map((e) => e.toString()).toList();
+      final originalPages = (previewResult['original_pages'] as List<dynamic>).map((e) => e.toString()).toList();
       final generatedImagePaths = _extractGeneratedImagePaths(previewResult);
 
+      if (!mounted) return;
       setState(() {
         _previewRevisedPages = revisedPages;
         _originalPages = originalPages;
         _generatedImagePaths = generatedImagePaths;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
-        _chatMessages.add({'role': 'ai', 'text': '미리보기 생성 중 오류가 발생했어요.\n$e'});
+        _errorMessage = _friendlyError(e, '이야기를 바꾸다가 문제가 생겼어요.');
+        _chatMessages.add({'role': 'ai', 'text': _friendlyError(e, '앗, 이야기를 바꾸다가 문제가 생겼어요. 다시 해 볼까요?')});
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('미리보기 생성 실패: $e')));
+      _showMessage('미리보기를 못 만들었어요. 다시 해 볼래요?', image: CrayongImages.surprised);
     } finally {
-      setState(() => _isGenerating = false);
+      if (mounted) setState(() => _isGenerating = false);
     }
   }
 
@@ -373,9 +334,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     if (request.isEmpty) return;
 
     if (_highlights.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('먼저 선택된 텍스트가 있어야 해요.')));
+      _showMessage('먼저 바꾸고 싶은 문장을 칠해 줘요.', image: CrayongImages.surprised);
       return;
     }
 
@@ -387,8 +346,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     });
 
     try {
-      final pageNumber =
-          widget.taleBook.pages[widget.selectedPageIndex].pageNumber;
+      final pageNumber = widget.taleBook.pages[widget.selectedPageIndex].pageNumber;
 
       final previewResult = await ApiService.sketchRevisePreview(
         storyId: widget.tale.storyId!,
@@ -397,34 +355,27 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
         confirmedRequest: request,
       );
 
-      final revisedPages = (previewResult['revised_pages'] as List<dynamic>)
-          .map((e) => e.toString())
-          .toList();
-
-      final originalPages = (previewResult['original_pages'] as List<dynamic>)
-          .map((e) => e.toString())
-          .toList();
-
+      final revisedPages = (previewResult['revised_pages'] as List<dynamic>).map((e) => e.toString()).toList();
+      final originalPages = (previewResult['original_pages'] as List<dynamic>).map((e) => e.toString()).toList();
       final generatedImagePaths = _extractGeneratedImagePaths(previewResult);
 
+      if (!mounted) return;
       setState(() {
         _interpretedRequest = request;
         _previewRevisedPages = revisedPages;
         _originalPages = originalPages;
         _generatedImagePaths = generatedImagePaths;
-        _chatMessages.add({
-          'role': 'ai',
-          'text': '좋아요! 말씀하신 내용으로 다시 미리보기를 만들었어요.',
-        });
+        _chatMessages.add({'role': 'ai', 'text': '좋아요! 말한 대로 다시 바꿔 봤어요.'});
         _showPreviewTab = true;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
-        _chatMessages.add({'role': 'ai', 'text': '다시 생성하는 중 오류가 발생했어요.\n$e'});
+        _errorMessage = _friendlyError(e, '다시 바꾸다가 문제가 생겼어요.');
+        _chatMessages.add({'role': 'ai', 'text': _friendlyError(e, '앗, 다시 바꾸다가 문제가 생겼어요.')});
       });
     } finally {
-      setState(() => _isGenerating = false);
+      if (mounted) setState(() => _isGenerating = false);
     }
   }
 
@@ -435,7 +386,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
       _isApplyingAsync = true;
       _errorMessage = null;
       _progressPercent = 0;
-      _progressMessage = '이미지 생성 중... 진행 상황은 30초마다 갱신돼요.';
+      _progressMessage = '크레용이 새 그림을 그리고 있어요. 30초마다 알려 줄게요.';
     });
 
     try {
@@ -450,9 +401,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
       _revisionJobId = jobId;
 
       _progressTimer?.cancel();
-      _progressTimer = Timer.periodic(const Duration(seconds: 30), (
-        timer,
-      ) async {
+      _progressTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
         try {
           final status = await ApiService.getRevisionJobStatus(jobId: jobId);
 
@@ -460,11 +409,8 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
 
           setState(() {
             _progressPercent = (status['progress_percent'] ?? 0) as int;
-            _progressMessage = status['message']?.toString() ?? '이미지 생성 중...';
-            _generatedImagePaths =
-                (status['generated_image_paths'] as List<dynamic>?)
-                    ?.map((e) => e.toString())
-                    .toList();
+            _progressMessage = status['message']?.toString() ?? '크레용이 새 그림을 그리고 있어요.';
+            _generatedImagePaths = (status['generated_image_paths'] as List<dynamic>?)?.map((e) => e.toString()).toList();
           });
 
           final jobStatus = (status['status'] ?? '').toString().toLowerCase();
@@ -473,10 +419,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
             timer.cancel();
 
             final generatedImagePaths =
-                (status['generated_image_paths'] as List<dynamic>?)
-                    ?.map((e) => e.toString())
-                    .toList() ??
-                _generatedImagePaths;
+                (status['generated_image_paths'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? _generatedImagePaths;
 
             if (!mounted) return;
 
@@ -502,60 +445,71 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
             if (!mounted) return;
             setState(() {
               _isApplyingAsync = false;
-              _errorMessage = status['error']?.toString() ?? '이미지 생성 실패';
+              _errorMessage = status['error']?.toString() ?? '그림을 못 그렸어요.';
             });
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('적용 실패: $_errorMessage')));
+            _showMessage(kDebugMode ? '적용 실패: $_errorMessage' : '그림을 못 그렸어요. 다시 해 볼래요?', image: CrayongImages.surprised);
           }
         } catch (e) {
           timer.cancel();
           if (!mounted) return;
           setState(() {
             _isApplyingAsync = false;
-            _errorMessage = e.toString();
+            _errorMessage = _friendlyError(e, '진행 상황을 못 가져왔어요.');
           });
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('상태 조회 실패: $e')));
+          _showMessage('진행 상황을 못 가져왔어요.', image: CrayongImages.surprised);
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isApplyingAsync = false;
-        _errorMessage = e.toString();
+        _errorMessage = _friendlyError(e, '적용하다가 문제가 생겼어요.');
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('적용 실패: $e')));
+      _showMessage('적용하다가 문제가 생겼어요. 다시 해 볼래요?', image: CrayongImages.surprised);
     }
+  }
+
+  void _resetAll() {
+    setState(() {
+      _showPreviewPanel = false;
+      _paths.clear();
+      _currentPath = null;
+      _previewRevisedPages = null;
+      _originalPages = null;
+      _generatedImagePaths = null;
+      _interpretedRequest = null;
+      _errorMessage = null;
+      _progressPercent = 0;
+      _progressMessage = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width >= 600;
+    final width = MediaQuery.of(context).size.width;
+    final isTablet = width >= 700;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(context, isTablet),
+            _buildHeader(isTablet),
             Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: isTablet ? 300 : 240,
-                    child: _buildScriptPanel(isTablet),
-                  ),
-                  Expanded(child: _buildCanvasPanel(isTablet)),
-                  if (_showPreviewPanel)
-                    SizedBox(
-                      width: isTablet ? 320 : 260,
-                      child: _buildPreviewPanel(isTablet),
-                    ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: isTablet ? 300 : 240, child: _buildScriptPanel()),
+                    const SizedBox(width: 14),
+                    Expanded(child: _buildCanvasPanel()),
+                    if (_showPreviewPanel) ...[
+                      const SizedBox(width: 14),
+                      SizedBox(width: isTablet ? 340 : 260, child: _buildPreviewPanel()),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -564,195 +518,202 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, bool isTablet) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isTablet ? 24 : 16,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+  Widget _buildHeader(bool isTablet) {
+    final page = widget.taleBook.pages[widget.selectedPageIndex];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F4FF),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.chevron_left,
-                color: Color(0xFF7E57C2),
-                size: 22,
-              ),
+          RoundIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('장면 바꾸기', style: AppTextStyles.headingLarge()),
+                Text(
+                  '${widget.tale.title} · ${page.pageNumber}번 장면',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption(color: AppColors.textSecondary),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '장면 수정하기',
-                style: TextStyle(
-                  fontSize: isTablet ? 18 : 16,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF3D2C8D),
-                ),
-              ),
-              Text(
-                '선택한 장면을 그림으로 그리고, 바꾸고 싶은 내용을 적어주세요.',
-                style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-              ),
-            ],
-          ),
+          if (isTablet) _buildStepIndicator(),
         ],
       ),
     );
   }
 
-  Widget _buildScriptPanel(bool isTablet) {
+  Widget _buildStepIndicator() {
+    const steps = ['동화 읽기', '장면 고르기', '장면 바꾸기'];
     return Container(
-      key: _textSelectionKey,
-      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border, width: 2),
       ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < steps.length; i++) ...[
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: i < 2 ? AppColors.secondaryDark : AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: i < 2
+                    ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+                    : Text('3', style: AppTextStyles.labelSmall(color: AppColors.onPrimary)),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              steps[i],
+              style: i == 2
+                  ? AppTextStyles.headingSmall().copyWith(fontSize: 16, height: 1.1)
+                  : AppTextStyles.labelSmall(color: AppColors.textHint),
+            ),
+            if (i < steps.length - 1)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textHint),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _panelTitle(int step, String title, {Widget? trailing}) {
+    return Row(
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: AppDecorations.sticker(
+            color: AppColors.primary,
+            shadowColor: AppColors.primaryDark,
+            radius: 14,
+            depth: 2,
+          ),
+          child: Center(child: Text('$step', style: AppTextStyles.labelMedium(color: AppColors.onPrimary))),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(title, style: AppTextStyles.headingSmall())),
+        if (trailing != null) trailing,
+      ],
+    );
+  }
+
+  Widget _textAction(String label, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(label, style: AppTextStyles.labelSmall(color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScriptPanel() {
+    return Container(
+      decoration: AppDecorations.card(radius: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-            child: Row(
-              children: [
-                const Text(
-                  '바꾸고 싶은 내용 선택',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3D2C8D),
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: _clearHighlights,
-                  child: Text(
-                    '초기화',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 16, 14, 10),
+            child: _panelTitle(
+              1,
+              '바꿀 문장 칠하기',
+              trailing: _highlights.isEmpty ? null : _textAction('다 지우기', Icons.refresh_rounded, _clearHighlights),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: _highlights.isEmpty
-                    ? const Color(0xFFF8F4FF)
-                    : const Color(0xFFEDE7F6),
-                borderRadius: BorderRadius.circular(8),
+                color: _highlights.isEmpty ? AppColors.surfaceVariant : AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
                 children: [
                   Icon(
-                    _highlights.isEmpty ? Icons.info_outline : Icons.highlight,
-                    size: 14,
-                    color: _highlights.isEmpty
-                        ? Colors.grey[400]
-                        : const Color(0xFF7E57C2),
+                    _highlights.isEmpty ? Icons.touch_app_rounded : Icons.check_circle_rounded,
+                    size: 17,
+                    color: AppColors.primaryText,
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      _highlights.isEmpty
-                          ? '텍스트를 드래그해서 선택하세요'
-                          : '${_highlights.length}개 구간 선택됨',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: _highlights.isEmpty
-                            ? Colors.grey[400]
-                            : const Color(0xFF7E57C2),
-                        fontWeight: _highlights.isEmpty
-                            ? FontWeight.w400
-                            : FontWeight.w600,
-                      ),
+                      _highlights.isEmpty ? '문장을 꾹 누르고 쭉 끌어서 칠해요' : '${_highlights.length}곳을 칠했어요',
+                      style: AppTextStyles.labelMedium(color: AppColors.primaryText),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: AppColors.border),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '텍스트를 길게 눌러 드래그해서 바꾸고 싶은 부분을 선택하세요.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
                   _buildHighlightedText(),
                   if (_highlights.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      '선택한 구간',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[500],
-                      ),
-                    ),
+                    const SizedBox(height: 18),
+                    Text('칠한 문장', style: AppTextStyles.labelMedium()),
                     const SizedBox(height: 8),
                     ..._highlights.asMap().entries.map((entry) {
                       final idx = entry.key;
                       final h = entry.value;
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFFD600).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
                             Expanded(
                               child: Text(
                                 '"${h.text}"',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF3D2C8D),
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                style: AppTextStyles.bodySmall(color: AppColors.textPrimary),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             GestureDetector(
                               onTap: () => _removeHighlight(idx),
-                              child: Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.grey[400],
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.close_rounded, size: 18, color: AppColors.primaryText),
                               ),
                             ),
                           ],
@@ -770,54 +731,36 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   }
 
   Widget _buildHighlightedText() {
+    final baseStyle = AppTextStyles.storyBody(fontSize: 17).copyWith(height: 1.9);
+
+    void onSelection(TextSelection selection, SelectionChangedCause? cause) {
+      if (cause == SelectionChangedCause.longPress || cause == SelectionChangedCause.drag) {
+        final start = selection.start;
+        final end = selection.end;
+        if (start >= 0 && end > start) {
+          _addHighlight(start, end);
+        }
+      }
+    }
+
     if (_highlights.isEmpty) {
-      return SelectableText(
-        _fullText,
-        style: const TextStyle(
-          fontSize: 14,
-          color: Color(0xFF3D2C8D),
-          height: 1.9,
-        ),
-        onSelectionChanged: (selection, cause) {
-          if (cause == SelectionChangedCause.longPress ||
-              cause == SelectionChangedCause.drag) {
-            final start = selection.start;
-            final end = selection.end;
-            if (start >= 0 && end > start) {
-              _addHighlight(start, end);
-            }
-          }
-        },
-      );
+      return SelectableText(_fullText, style: baseStyle, onSelectionChanged: onSelection);
     }
 
     final List<TextSpan> spans = [];
-    final sortedHighlights = List<HighlightRange>.from(_highlights)
-      ..sort((a, b) => a.start.compareTo(b.start));
+    final sortedHighlights = List<HighlightRange>.from(_highlights)..sort((a, b) => a.start.compareTo(b.start));
 
     int currentIndex = 0;
     for (final highlight in sortedHighlights) {
       if (highlight.start > currentIndex) {
-        spans.add(
-          TextSpan(
-            text: _fullText.substring(currentIndex, highlight.start),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF3D2C8D),
-              height: 1.9,
-            ),
-          ),
-        );
+        spans.add(TextSpan(text: _fullText.substring(currentIndex, highlight.start), style: baseStyle));
       }
       spans.add(
         TextSpan(
           text: _fullText.substring(highlight.start, highlight.end),
-          style: TextStyle(
-            fontSize: 14,
-            color: const Color(0xFF3D2C8D),
-            height: 1.9,
-            fontWeight: FontWeight.w600,
-            backgroundColor: const Color(0xFFFFD600).withOpacity(0.5),
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.w700,
+            backgroundColor: const Color(0x99FFD35A),
           ),
         ),
       );
@@ -825,157 +768,67 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     }
 
     if (currentIndex < _fullText.length) {
-      spans.add(
-        TextSpan(
-          text: _fullText.substring(currentIndex),
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF3D2C8D),
-            height: 1.9,
-          ),
-        ),
-      );
+      spans.add(TextSpan(text: _fullText.substring(currentIndex), style: baseStyle));
     }
 
-    return SelectableText.rich(
-      TextSpan(children: spans),
-      onSelectionChanged: (selection, cause) {
-        if (cause == SelectionChangedCause.longPress ||
-            cause == SelectionChangedCause.drag) {
-          final start = selection.start;
-          final end = selection.end;
-          if (start >= 0 && end > start) {
-            _addHighlight(start, end);
-          }
-        }
-      },
-    );
+    return SelectableText.rich(TextSpan(children: spans), onSelectionChanged: onSelection);
   }
 
-  Widget _buildCanvasPanel(bool isTablet) {
+  Widget _buildCanvasPanel() {
+    final busy = _isGenerating || _isApplyingAsync;
     return Container(
-      margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: AppDecorations.card(radius: 24),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            child: Row(
-              children: [
-                const Text(
-                  '새롭게 그리고 싶은 장면을 그려주세요!',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3D2C8D),
-                  ),
-                ),
-                const Spacer(),
-                _iconBtn(Icons.undo, _undo),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _clearCanvas,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[200]!),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.delete_outline,
-                          size: 14,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '전체 지우기',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+            child: _panelTitle(
+              2,
+              '새 장면 그리기',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _textAction('되돌리기', Icons.undo_rounded, _undo),
+                  const SizedBox(width: 6),
+                  _textAction('다 지우기', Icons.delete_outline_rounded, _clearCanvas),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 10),
           Expanded(
-            child: Row(
-              children: [
-                _buildToolbar(),
-                Expanded(child: _buildCanvas()),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  _buildToolbar(),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.border, width: 2),
+                      ),
+                      child: _buildCanvas(),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           _buildColorBar(),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             child: Column(
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    key: _previewButtonKey, // [추가] 3단계 타깃: 미리보기 액션 버튼
-                    onPressed: (_isGenerating || _isApplyingAsync)
-                        ? null
-                        : _generatePreviewFlow,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7E57C2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: _isGenerating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('AI로 수정 결과 미리보기'),
-                  ),
+                _BigStickerButton(
+                  label: _isGenerating ? '크레용이 생각하고 있어요...' : '크레용에게 보내기',
+                  icon: Icons.auto_awesome_rounded,
+                  loading: _isGenerating,
+                  onTap: busy ? null : _generatePreviewFlow,
                 ),
                 if (_isApplyingAsync) ...[
                   const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: (_progressPercent / 100).clamp(0.0, 1.0),
-                    minHeight: 8,
-                    backgroundColor: const Color(0xFFEDE7F6),
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF7E57C2)),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _progressMessage ?? '이미지 생성 중...',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF7E57C2),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$_progressPercent%',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF3D2C8D),
-                    ),
-                  ),
+                  _buildProgress(),
                 ],
               ],
             ),
@@ -985,274 +838,261 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     );
   }
 
-  Widget _iconBtn(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[200]!),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 16, color: Colors.grey[500]),
+  Widget _buildProgress() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.secondaryLight,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Image.asset(CrayongImages.drawing, height: 44),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _progressMessage ?? '크레용이 새 그림을 그리고 있어요.',
+                        style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
+                      ),
+                    ),
+                    Text('$_progressPercent%', style: AppTextStyles.headingSmall()),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                LinearProgressIndicator(
+                  value: (_progressPercent / 100).clamp(0.0, 1.0),
+                  minHeight: 8,
+                  borderRadius: const BorderRadius.all(Radius.circular(4)),
+                  backgroundColor: AppColors.surface,
+                  valueColor: const AlwaysStoppedAnimation(AppColors.secondaryDark),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildToolbar() {
     final tools = [
-      {'icon': Icons.edit, 'label': '펜'},
-      {'icon': Icons.auto_fix_high, 'label': '지우개'},
+      {'icon': Icons.edit_rounded, 'label': '펜', 'eraser': false},
+      {'icon': Icons.auto_fix_normal_rounded, 'label': '지우개', 'eraser': true},
     ];
 
-    return Container(
-      width: 60,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        children: tools.map((tool) {
-          final isActive =
-              tool['label'] == '펜' && !_isEraser ||
-              tool['label'] == '지우개' && _isEraser;
-          return GestureDetector(
-            onTap: () {
-              if (tool['label'] == '펜') setState(() => _isEraser = false);
-              if (tool['label'] == '지우개') setState(() => _isEraser = true);
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 3),
-              width: 44,
-              height: 52,
+    return Column(
+      children: tools.map((tool) {
+        final isEraserTool = tool['eraser'] as bool;
+        final isActive = isEraserTool == _isEraser;
+        return GestureDetector(
+          onTap: () => setState(() => _isEraser = isEraserTool),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              margin: const EdgeInsets.only(bottom: 8),
+              width: 56,
+              height: 60,
               decoration: BoxDecoration(
-                color: isActive ? const Color(0xFFEDE7F6) : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+                color: isActive ? AppColors.primaryLight : AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isActive ? AppColors.primary : Colors.transparent, width: 2),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    tool['icon'] as IconData,
-                    size: 20,
-                    color: isActive
-                        ? const Color(0xFF7E57C2)
-                        : Colors.grey[500],
-                  ),
+                  Icon(tool['icon'] as IconData, size: 22, color: isActive ? AppColors.textPrimary : AppColors.textHint),
                   const SizedBox(height: 2),
                   Text(
                     tool['label'] as String,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: isActive
-                          ? const Color(0xFF7E57C2)
-                          : Colors.grey[400],
-                    ),
+                    style: AppTextStyles.labelSmall(color: isActive ? AppColors.textPrimary : AppColors.textHint),
                   ),
                 ],
               ),
             ),
-          );
-        }).toList(),
-      ),
+          ),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildCanvas() {
-    return Container(
-        key: _canvasKey,
-        child: RepaintBoundary(
-          key: _sketchKey,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              color: Colors.white,
-              child: GestureDetector(
-                onPanStart: (details) {
-                  setState(() {
-                    _currentPath = DrawingPath(
-                      color: _isEraser ? Colors.white : _selectedColor,
-                      strokeWidth: _isEraser ? 24 : _strokeWidth,
-                      points: [details.localPosition],
-                    );
-                    _paths.add(_currentPath!);
-                  });
-                },
-                onPanUpdate: (details) {
-                  setState(() {
-                    _currentPath?.points.add(details.localPosition);
-                  });
-                },
-                onPanEnd: (_) => _currentPath = null,
-                child: CustomPaint(
-                  painter: DrawingPainter(_paths),
-                  child: Container(
-                    width: double.infinity,
-                    height: double.infinity,
-                    color: Colors.transparent,
-                  ),
-                ),
+    return RepaintBoundary(
+      key: _sketchKey,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          color: Colors.white,
+          child: GestureDetector(
+            onPanStart: (details) {
+              setState(() {
+                _currentPath = DrawingPath(
+                  color: _isEraser ? Colors.white : _selectedColor,
+                  strokeWidth: _isEraser ? 24 : _strokeWidth,
+                  points: [details.localPosition],
+                );
+                _paths.add(_currentPath!);
+              });
+            },
+            onPanUpdate: (details) {
+              setState(() {
+                _currentPath?.points.add(details.localPosition);
+              });
+            },
+            onPanEnd: (_) => _currentPath = null,
+            child: CustomPaint(
+              painter: DrawingPainter(_paths),
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.transparent,
               ),
             ),
           ),
         ),
+      ),
     );
   }
 
   Widget _buildColorBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          ..._colorPalette.map((color) {
-            final isSelected = _selectedColor == color && !_isEraser;
-            return GestureDetector(
-              onTap: () => setState(() {
-                _selectedColor = color;
-                _isEraser = false;
-              }),
-              child: Container(
-                margin: const EdgeInsets.only(right: 6),
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFF7E57C2)
-                        : Colors.grey[300]!,
-                    width: isSelected ? 2.5 : 1,
-                  ),
-                ),
-              ),
-            );
-          }),
-          const SizedBox(width: 12),
-          Text('굵기', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
           Expanded(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _colorPalette.map((color) {
+                final isSelected = _selectedColor == color && !_isEraser;
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    _selectedColor = color;
+                    _isEraser = false;
+                  }),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: isSelected ? 34 : 30,
+                      height: isSelected ? 34 : 30,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? AppColors.surface : AppColors.border,
+                          width: isSelected ? 3 : 2,
+                        ),
+                        boxShadow: isSelected
+                            ? const [BoxShadow(color: AppColors.primary, blurRadius: 0, spreadRadius: 3)]
+                            : null,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text('굵기', style: AppTextStyles.labelMedium()),
+          SizedBox(
+            width: 140,
             child: Slider(
               value: _strokeWidth,
               min: 2,
               max: 30,
-              activeColor: const Color(0xFF7E57C2),
               onChanged: (v) => setState(() => _strokeWidth = v),
             ),
           ),
-          Text(
-            '${_strokeWidth.round()}px',
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            child: Container(
+              width: _strokeWidth.clamp(4.0, 30.0),
+              height: _strokeWidth.clamp(4.0, 30.0),
+              decoration: BoxDecoration(
+                color: _isEraser ? AppColors.border : _selectedColor,
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPreviewPanel(bool isTablet) {
+  Widget _buildPreviewPanel() {
+    final canApply = _previewRevisedPages != null && !_isGenerating && !_isApplyingAsync;
     return Container(
-      margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
+      decoration: AppDecorations.card(radius: 24),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            padding: const EdgeInsets.fromLTRB(16, 14, 10, 0),
             child: Row(
               children: [
-                const Text(
-                  '수정 결과 미리보기',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF3D2C8D),
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => setState(() => _showPreviewPanel = false),
-                  child: const Icon(Icons.close, size: 18, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                _previewTab('미리보기', true),
+                Image.asset(CrayongImages.wink, height: 36),
                 const SizedBox(width: 8),
-                _previewTab('AI와 이야기하기', false),
+                Expanded(child: Text('크레용이 바꾼 이야기', style: AppTextStyles.headingSmall())),
+                IconButton(
+                  onPressed: () => setState(() => _showPreviewPanel = false),
+                  icon: const Icon(Icons.close_rounded, color: AppColors.textHint),
+                  tooltip: '닫기',
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          const Divider(height: 1),
-          Expanded(
-            child: _showPreviewTab
-                ? _buildPreviewContent()
-                : _buildChatContent(),
-          ),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+            child: Row(
+              children: [
+                Expanded(child: _previewTab('미리보기', true)),
+                const SizedBox(width: 8),
+                Expanded(child: _previewTab('크레용과 이야기', false)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          Expanded(child: _showPreviewTab ? _buildPreviewContent() : _buildChatContent()),
+          Padding(
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed:
-                        (_previewRevisedPages == null ||
-                            _isGenerating ||
-                            _isApplyingAsync)
-                        ? null
-                        : _applyPreview,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7E57C2),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 12,
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: _isApplyingAsync ? null : _resetAll,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        side: const BorderSide(color: AppColors.border, width: 2),
                       ),
-                      minimumSize: const Size(0, 44),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      child: const Text('다시 그리기'),
                     ),
-                    child: _isApplyingAsync
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            '이대로 적용하기',
-                            style: TextStyle(fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                   ),
                 ),
-
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: _isApplyingAsync
-                        ? null
-                        : () {
-                            setState(() {
-                              _showPreviewPanel = false;
-                              _paths.clear();
-                              _currentPath = null;
-                              _previewRevisedPages = null;
-                              _originalPages = null;
-                              _generatedImagePaths = null;
-                              _interpretedRequest = null;
-                              _errorMessage = null;
-                              _progressPercent = 0;
-                              _progressMessage = null;
-                            });
-                          },
-                    child: const Text('다시 그리기'),
+                  child: SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: canApply ? _applyPreview : null,
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                      child: _isApplyingAsync
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary),
+                            )
+                          : const Text('이대로 할래요', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
                   ),
                 ),
               ],
@@ -1267,21 +1107,21 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     final isActive = _showPreviewTab == isPreview;
     return GestureDetector(
       onTap: () => setState(() => _showPreviewTab = isPreview),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF7E57C2) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? const Color(0xFF7E57C2) : Colors.grey[200]!,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.primary : AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(20),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isActive ? Colors.white : Colors.grey[500],
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+          child: Text(
+            label,
+            style: AppTextStyles.headingSmall(
+              color: isActive ? AppColors.onPrimary : AppColors.textSecondary,
+            ).copyWith(fontSize: 16, height: 1.1),
           ),
         ),
       ),
@@ -1289,62 +1129,59 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
   }
 
   Widget _buildPreviewContent() {
+    if (_isGenerating && _previewRevisedPages == null) {
+      return const CrayongStatusView(
+        image: CrayongImages.drawing,
+        imageHeight: 120,
+        title: '크레용이 이야기를 바꾸고 있어요',
+        child: SizedBox(
+          width: 140,
+          child: LinearProgressIndicator(minHeight: 6, borderRadius: BorderRadius.all(Radius.circular(3))),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_highlights.isNotEmpty) ...[
-            Text(
-              '바뀌는 내용',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[500],
-              ),
-            ),
+            Text('이렇게 바뀌어요', style: AppTextStyles.labelMedium()),
             const SizedBox(height: 8),
             ..._highlights.map(
               (h) => Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F4FF),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        '"${h.text}"',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF7E57C2),
-                          fontWeight: FontWeight.w500,
-                        ),
+                    Text(
+                      '"${h.text}"',
+                      style: AppTextStyles.bodySmall(color: AppColors.textSecondary).copyWith(
+                        decoration: TextDecoration.lineThrough,
+                        decorationColor: AppColors.textHint,
                       ),
                     ),
-                    const Icon(
-                      Icons.arrow_forward,
-                      size: 14,
-                      color: Colors.grey,
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Icon(Icons.arrow_downward_rounded, size: 16, color: AppColors.primaryText),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _interpretedRequest == null
-                            ? 'AI가 바꾸는 중이에요'
-                            : _interpretedRequest!,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Text(
+                      _interpretedRequest == null ? '크레용이 바꾸는 중이에요' : _interpretedRequest!,
+                      style: AppTextStyles.bodyMedium(color: AppColors.textPrimary),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
           ],
           if (_previewRevisedPages != null)
             Container(
@@ -1352,26 +1189,29 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEDE7F6),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.secondaryLight,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${_changedPagesSummary()}가 새 흐름에 맞게 다시 구성되었어요.',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF7E57C2),
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      const Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.secondaryDark),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '${_changedPagesSummary()}를 새 이야기에 맞게 다시 썼어요.',
+                          style: AppTextStyles.labelMedium(color: const Color(0xFF3E6F2E)),
+                        ),
+                      ),
+                    ],
                   ),
-                  if (_generatedImagePaths != null &&
-                      _generatedImagePaths!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                  if (_generatedImagePaths != null && _generatedImagePaths!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
                     Text(
-                      '생성 이미지 ${_generatedImagePaths!.length}개가 준비되었어요.',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                      '새 그림 ${_generatedImagePaths!.length}장이 준비됐어요.',
+                      style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
                     ),
                   ],
                   if (_isApplyingAsync) ...[
@@ -1379,25 +1219,36 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
                     LinearProgressIndicator(
                       value: (_progressPercent / 100).clamp(0.0, 1.0),
                       minHeight: 8,
-                      backgroundColor: Colors.white,
-                      valueColor: const AlwaysStoppedAnimation(
-                        Color(0xFF7E57C2),
-                      ),
+                      borderRadius: const BorderRadius.all(Radius.circular(4)),
+                      backgroundColor: AppColors.surface,
+                      valueColor: const AlwaysStoppedAnimation(AppColors.secondaryDark),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      _progressMessage ?? '이미지 생성 중...',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF7E57C2),
-                      ),
+                      _progressMessage ?? '크레용이 새 그림을 그리고 있어요.',
+                      style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
                     ),
                   ],
                 ],
               ),
             ),
           if (_errorMessage != null)
-            Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.errorLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Image.asset(CrayongImages.surprised, height: 36),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_errorMessage!, style: AppTextStyles.bodySmall(color: AppColors.error))),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1413,35 +1264,39 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
               _chatBubble(
                 'ai',
                 _interpretedRequest == null
-                    ? '어때요? 마음에 드나요?\n더 바꾸고 싶은 점이 있으면 저에게 이야기해 주세요!'
-                    : '현재 이렇게 이해하고 있어요:\n$_interpretedRequest',
+                    ? '어때요? 마음에 들어요?\n더 바꾸고 싶은 게 있으면 크레용한테 말해 줘요!'
+                    : '지금은 이렇게 바꾸고 있어요.\n$_interpretedRequest',
               ),
-              ..._chatMessages.map(
-                (msg) => _chatBubble(msg['role']!, msg['text']!),
-              ),
+              ..._chatMessages.map((msg) => _chatBubble(msg['role']!, msg['text']!)),
+              if (_isGenerating) _chatBubble('ai', '음... 생각하는 중이에요.'),
             ],
           ),
         ),
         Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AppColors.border, width: 1.5)),
           ),
           child: Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _chatController,
-                  style: const TextStyle(fontSize: 13),
+                  style: AppTextStyles.bodyMedium(color: AppColors.textPrimary),
                   decoration: InputDecoration(
-                    hintText: '원하는 수정 내용을 말해보세요...',
-                    hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    hintText: '이렇게 바꿔 줘!',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: const BorderSide(color: AppColors.border, width: 1.5),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: const BorderSide(color: AppColors.border, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
                     ),
                   ),
                   onSubmitted: (_) => _regenerateFromChat(),
@@ -1449,15 +1304,15 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: _regenerateFromChat,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF7E57C2),
-                    shape: BoxShape.circle,
+                onTap: _isGenerating ? null : _regenerateFromChat,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: AppDecorations.primaryButton(radius: 22, depth: 3),
+                    child: const Icon(Icons.send_rounded, size: 20, color: AppColors.onPrimary),
                   ),
-                  child: const Icon(Icons.send, size: 16, color: Colors.white),
                 ),
               ),
             ],
@@ -1472,40 +1327,37 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment: isAI
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.end,
+        mainAxisAlignment: isAI ? MainAxisAlignment.start : MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isAI) ...[
             Container(
-              width: 28,
-              height: 28,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEDE7F6),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.emoji_nature,
-                size: 16,
-                color: Color(0xFF7E57C2),
-              ),
+              width: 34,
+              height: 34,
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(color: AppColors.secondaryLight, shape: BoxShape.circle),
+              child: Image.asset(CrayongImages.wink),
             ),
             const SizedBox(width: 8),
           ],
-          Container(
-            constraints: const BoxConstraints(maxWidth: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isAI ? const Color(0xFFEDE7F6) : const Color(0xFF7E57C2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 12,
-                color: isAI ? const Color(0xFF3D2C8D) : Colors.white,
-                height: 1.5,
+          Flexible(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 230),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: isAI ? AppColors.secondaryLight : AppColors.primaryLight,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isAI ? 4 : 16),
+                  topRight: Radius.circular(isAI ? 16 : 4),
+                  bottomLeft: const Radius.circular(16),
+                  bottomRight: const Radius.circular(16),
+                ),
+              ),
+              child: Text(
+                text,
+                style: AppTextStyles.bodySmall(
+                  color: isAI ? const Color(0xFF2F4F24) : AppColors.textPrimary,
+                ).copyWith(height: 1.5),
               ),
             ),
           ),
@@ -1513,220 +1365,68 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
       ),
     );
   }
+}
 
-// [병규 튜토리얼] 1단계 위치를 절대 좌표(targetPosition)로 강제 고정
-  void _initTutorialTargets() {
-    final screenSize = MediaQuery.of(context).size;
-    final isTablet = screenSize.width >= 600;
-    final double panelWidth = isTablet ? 300.0 : 240.0;
-    final double leftOffset = panelWidth + 24.0; // 요정이 패널 오른쪽에 서 있을 위치
+class _BigStickerButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool loading;
+  final VoidCallback? onTap;
 
-    _targets = [
-      // 1단계: 텍스트 선택 유도 (왼쪽 패널에 오차 없이 정확히 고정)
-      TargetFocus(
-        identify: "textSelectionTarget",
-        keyTarget: _textSelectionKey,
-        // [핵심] GlobalKey 계산 오류 방지를 위해 왼쪽 패널 크기와 위치를 직접 지정!
-        targetPosition: TargetPosition(
-          Size(panelWidth, screenSize.height - 84), // 왼쪽 패널 크기
-          const Offset(12, 60),                      // 상단 헤더 아래 시작 좌표
+  const _BigStickerButton({
+    required this.label,
+    required this.icon,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  State<_BigStickerButton> createState() => _BigStickerButtonState();
+}
+
+class _BigStickerButtonState extends State<_BigStickerButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const depth = 5.0;
+    final enabled = widget.onTap != null;
+    final down = _pressed && enabled;
+
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 58,
+          width: double.infinity,
+          transform: Matrix4.translationValues(0, down ? depth : 0, 0),
+          decoration: AppDecorations.sticker(
+            color: enabled || widget.loading ? AppColors.primary : AppColors.surfaceVariant,
+            shadowColor: enabled || widget.loading ? AppColors.primaryDark : AppColors.border,
+            radius: 20,
+            depth: down ? 0 : depth,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (widget.loading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary),
+                )
+              else
+                Icon(widget.icon, size: 22, color: AppColors.onPrimary),
+              const SizedBox(width: 10),
+              Text(widget.label, style: AppTextStyles.button().copyWith(fontSize: 22)),
+            ],
+          ),
         ),
-        shape: ShapeLightFocus.RRect,
-        radius: 16,
-        alignSkip: Alignment.topRight,
-        contents: [
-          TargetContent(
-            align: ContentAlign.custom,
-            customPosition: CustomTargetContentPosition(
-              top: 80,
-              left: leftOffset, // 왼쪽 패널 바로 옆 도화지 위치
-            ),
-            builder: (context, controller) {
-              return _buildTutorialBubble(
-                context: context,
-                title: "1단계: 바꿀 내용 고르기",
-                description: "동화 내용 중 바꾸고 싶은 단어나 문장을\n마우스로 꾹 눌러 드래그해 보세요!",
-                fairyOnLeft: true,
-                onNext: () => controller.next(),
-              );
-            },
-          ),
-        ],
-      ),
-
-      // 2단계: 그림 그리기 유도
-      TargetFocus(
-        identify: "canvasTarget",
-        keyTarget: _canvasKey,
-        shape: ShapeLightFocus.RRect,
-        radius: 16,
-        alignSkip: Alignment.topRight,
-        contents: [
-          TargetContent(
-            align: ContentAlign.custom,
-            customPosition: CustomTargetContentPosition(
-              top: 90,
-              right: 30,
-            ),
-            builder: (context, controller) {
-              return _buildTutorialBubble(
-                context: context,
-                title: "2단계: 새로운 장면 그리기",
-                description: "선택한 내용을 대신할 새로운 그림을\n도화지에 자유롭게 그려보세요!",
-                fairyOnLeft: false,
-                onNext: () => controller.next(),
-              );
-            },
-          ),
-        ],
-      ),
-
-      // 3단계: AI 미리보기 버튼 유도
-      TargetFocus(
-        identify: "previewButtonTarget",
-        keyTarget: _previewButtonKey,
-        shape: ShapeLightFocus.RRect,
-        radius: 14,
-        alignSkip: Alignment.topRight,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildTutorialBubble(
-                context: context,
-                title: "3단계: AI로 확인하기",
-                description: "그림을 다 그렸다면 이 버튼을 눌러\nAI가 바꾼 동화와 그림을 미리 확인해요!",
-                isLast: true,
-                fairyOnLeft: true,
-                onNext: () => controller.next(),
-              );
-            },
-          ),
-        ],
-      ),
-    ];
-  }
-
-  // [병규 튜토리얼] 화면 절반 크기의 요정 캐릭터 + 대형 말풍선 위젯
-  Widget _buildTutorialBubble({
-    required BuildContext context,
-    required String title,
-    required String description,
-    required VoidCallback onNext,
-    bool isLast = false,
-    bool fairyOnLeft = true, // 요정 위치 (좌/우 선택 가능)
-  }) {
-    final screenSize = MediaQuery.of(context).size;
-    final fairyHeight = (screenSize.height * 0.45).clamp(240.0, 420.0); // 화면 높이의 약 45%
-
-    // [병규 수정] Lottie 움직이는 요정 캐릭터 적용
-    Widget fairyCharacter = SizedBox(
-      height: fairyHeight,
-      width: fairyHeight * 0.75,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Lottie.asset(
-              'assets/animations/fairy.json',
-              fit: BoxFit.contain,
-              repeat: true,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF7E57C2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              "이야기 요정",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // 2. 대형 설명 말풍선 카드
-    Widget speechBubble = ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: (screenSize.width * 0.4).clamp(260.0, 380.0),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFD1C4E9), width: 2),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF3D2C8D),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              description,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF4A4A4A),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton(
-                onPressed: onNext,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7E57C2),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 2,
-                ),
-                child: Text(
-                  isLast ? "멋진 동화 만들기!" : "다음으로",
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    // 3. 요정과 말풍선 가로 나란히 배치
-    return Material(
-      color: Colors.transparent,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: fairyOnLeft
-            ? [fairyCharacter, const SizedBox(width: 16), speechBubble]
-            : [speechBubble, const SizedBox(width: 16), fairyCharacter],
       ),
     );
   }

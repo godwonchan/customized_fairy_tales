@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
+import '../widgets/crayong_widgets.dart';
 import 'fairy_tale_list_screen.dart';
-import 'my_stories_screen.dart';
+import 'home_screen.dart';
 import '../services/api_service.dart';
 import '../widgets/story_image_view.dart';
 import 'tale_reading_screen.dart';
@@ -43,20 +46,16 @@ class _AIResultScreenState extends State<AIResultScreen>
     _currentPage = 0;
     _pageController = PageController(initialPage: 0);
 
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
+    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
 
     _updatedTaleBook = _buildUpdatedTaleBook();
 
-    print('AI RESULT revisedPages = ${widget.revisedPages}');
-    print('AI RESULT generatedImagePaths = ${widget.generatedImagePaths}');
-    print(
-      'AI RESULT updatedTexts = ${_updatedTaleBook.pages.map((e) => e.text).toList()}',
-    );
+    if (kDebugMode) {
+      debugPrint('AI RESULT revisedPages = ${widget.revisedPages}');
+      debugPrint('AI RESULT generatedImagePaths = ${widget.generatedImagePaths}');
+    }
   }
 
   @override
@@ -66,7 +65,6 @@ class _AIResultScreenState extends State<AIResultScreen>
     super.dispose();
   }
 
-  // ✅ 수정된 페이지 인덱스 이후는 모두 표시
   bool _isEditedIndex(int index) {
     if (widget.revisedPages == null) return false;
     if (index < widget.editedPageIndex) return false;
@@ -88,9 +86,7 @@ class _AIResultScreenState extends State<AIResultScreen>
       final index = entry.key;
       final page = entry.value;
 
-      final hasRevisedText =
-          widget.revisedPages != null && index < widget.revisedPages!.length;
-
+      final hasRevisedText = widget.revisedPages != null && index < widget.revisedPages!.length;
       final revisedImage = _generatedImageForIndex(index);
 
       return page.copyWith(
@@ -104,68 +100,99 @@ class _AIResultScreenState extends State<AIResultScreen>
 
   void _goPrevPage() {
     if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
+      _pageController.previousPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
   }
 
   void _goNextPage() {
     if (_currentPage < _updatedTaleBook.pages.length - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
+      _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
     }
+  }
+
+  void _showMessage(String text, {String image = CrayongImages.wink}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Image.asset(image, width: 30, height: 30),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: AppTextStyles.labelLarge(color: Colors.white))),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showSaveDialog() async {
     if (widget.tale.storyId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('저장할 수 있는 동화가 아니에요.')));
+      _showMessage('이 동화는 저장할 수 없어요.', image: CrayongImages.surprised);
       return;
     }
 
-    final controller = TextEditingController(
-      text: '${widget.tale.title} - 내 이야기',
-    );
+    final defaultTitle = '${widget.tale.title} - 내 이야기';
+    final controller = TextEditingController(text: defaultTitle);
 
     final title = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('동화 제목 정하기'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 50,
-            decoration: const InputDecoration(
-              hintText: '저장할 동화 제목을 입력하세요',
-              border: OutlineInputBorder(),
+        void submit() {
+          final value = controller.text.trim();
+          Navigator.pop(dialogContext, value.isEmpty ? defaultTitle : value);
+        }
+
+        return Dialog(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(CrayongImages.celebrate, height: 110),
+                  const SizedBox(height: 10),
+                  Text('새 동화에 이름을 지어 줘요', style: AppTextStyles.headingMedium()),
+                  const SizedBox(height: 4),
+                  Text('나의 책장에 이 이름으로 꽂아 둘게요.', style: AppTextStyles.bodyMedium()),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLength: 50,
+                    style: AppTextStyles.bodyLarge(),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                    decoration: const InputDecoration(
+                      hintText: '동화 이름',
+                      prefixIcon: Icon(Icons.edit_rounded, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.border, width: 2),
+                          ),
+                          child: const Text('취소'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: submit,
+                          child: const Text('책장에 넣기'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final value = controller.text.trim();
-                Navigator.pop(
-                  dialogContext,
-                  value.isEmpty ? '${widget.tale.title} - 내 이야기' : value,
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3D2C8D),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('저장'),
-            ),
-          ],
         );
       },
     );
@@ -180,10 +207,7 @@ class _AIResultScreenState extends State<AIResultScreen>
     setState(() => _isSaving = true);
 
     try {
-      await ApiService.saveAsMyStory(
-        storyId: widget.tale.storyId!,
-        customTitle: customTitle,
-      );
+      await ApiService.saveAsMyStory(storyId: widget.tale.storyId!, customTitle: customTitle);
 
       if (!widget.tale.isUserStory) {
         await ApiService.resetToOriginal(storyId: widget.tale.storyId!);
@@ -191,20 +215,16 @@ class _AIResultScreenState extends State<AIResultScreen>
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('나의 책장에 저장되었어요!')));
+      _showMessage('나의 책장에 꽂아 뒀어요!', image: CrayongImages.celebrate);
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const MyStoriesScreen()),
+        MaterialPageRoute(builder: (_) => const AppShell(initialIndex: 2, initialMyStoriesTab: 1)),
         (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+      _showMessage(kDebugMode ? '저장 실패: $e' : '책장에 못 넣었어요. 다시 해 볼래요?', image: CrayongImages.surprised);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -213,209 +233,305 @@ class _AIResultScreenState extends State<AIResultScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4FF),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF3D2C8D),
-        elevation: 0,
-        title: const Text('AI 결과 보기'),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 700;
+                    return PageView.builder(
+                      controller: _pageController,
+                      itemCount: _updatedTaleBook.pages.length,
+                      onPageChanged: (index) => setState(() => _currentPage = index),
+                      itemBuilder: (context, index) {
+                        final page = _updatedTaleBook.pages[index];
+                        final isEdited = _isEditedIndex(index);
+                        return isWide ? _buildWidePage(page, isEdited) : _buildNarrowPage(page, isEdited);
+                      },
+                    );
+                  },
+                ),
+              ),
+              _buildBottomBar(),
+            ],
+          ),
+        ),
       ),
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Column(
-          children: [
-            // ── 페이지 뷰 ──
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _updatedTaleBook.pages.length,
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                itemBuilder: (context, index) {
-                  final page = _updatedTaleBook.pages[index];
-                  final isEdited = _isEditedIndex(index);
+    );
+  }
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Column(
-                      children: [
-                        // ✅ 이미지: 16:9 고정 비율, 전체 표시
-                        Stack(
-                          children: [
-                            AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: widget.tale.cardColor,
-                                  borderRadius: BorderRadius.circular(24),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24),
-                                  child: StoryImageView(
-                                    imagePath: page.imagePath,
-                                    fit: BoxFit.contain, // ✅ 전체 표시
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (isEdited)
-                              Positioned(
-                                top: 14,
-                                right: 14,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF7E57C2),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Text(
-                                    'AI 수정',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // ✅ 텍스트 영역
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${page.pageNumber}페이지',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF7E57C2),
-                                ),
-                              ),
-                              if (isEdited &&
-                                  widget.confirmedRequest != null &&
-                                  widget.confirmedRequest!
-                                      .trim()
-                                      .isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  '반영 요청: ${widget.confirmedRequest!}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 10),
-                              Text(
-                                page.text,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  height: 1.7,
-                                  color: Color(0xFF3D2C8D),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+      child: Row(
+        children: [
+          RoundIconButton(icon: Icons.arrow_back_rounded, tooltip: '더 바꾸기', onTap: () => Navigator.pop(context)),
+          const SizedBox(width: 12),
+          Image.asset(CrayongImages.celebrate, height: 52),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('짜잔! 새 이야기가 완성됐어요', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.headingLarge()),
+                Text(
+                  '${widget.tale.title} · 바뀐 장면에는 초록 표시가 있어요',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption(color: AppColors.textSecondary),
+                ),
+              ],
             ),
-            // ── 하단 버튼 영역 ──
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImage(TalePage page, bool isEdited) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: isEdited ? AppColors.secondary : AppColors.border, width: isEdited ? 3 : 2),
+              boxShadow: [
+                BoxShadow(
+                  color: isEdited ? const Color(0xFFBFDDA5) : AppColors.border,
+                  blurRadius: 0,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF8F4FF),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
+                color: widget.tale.cardColor,
+                borderRadius: BorderRadius.circular(22),
               ),
-              child: Column(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: StoryImageView(imagePath: page.imagePath, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        ),
+        if (isEdited)
+          Positioned(
+            top: 22,
+            right: 22,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: AppDecorations.sticker(
+                color: AppColors.secondaryDark,
+                shadowColor: const Color(0xFF457A36),
+                radius: 20,
+                depth: 3,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _currentPage > 0 ? _goPrevPage : null,
-                          child: const Text('이전 페이지'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '${_currentPage + 1} / ${_updatedTaleBook.pages.length}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF3D2C8D),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed:
-                              _currentPage < _updatedTaleBook.pages.length - 1
-                              ? _goNextPage
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7E57C2),
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('다음 페이지'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _showSaveDialog,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3D2C8D),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('나의 책장에 저장'),
-                    ),
-                  ),
+                  const Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.white),
+                  const SizedBox(width: 5),
+                  Text('새로 바뀐 장면', style: AppTextStyles.labelMedium(color: Colors.white)),
                 ],
               ),
             ),
-          ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTextCard(TalePage page, bool isEdited, {required bool scrollable}) {
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isEdited && widget.confirmedRequest != null && widget.confirmedRequest!.trim().isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.secondaryLight,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.brush_rounded, size: 18, color: AppColors.secondaryDark),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '이렇게 바꿨어요: ${widget.confirmedRequest!}',
+                    style: AppTextStyles.bodySmall(color: const Color(0xFF3E6F2E)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+        Text(page.text, style: AppTextStyles.storyBody(fontSize: 20)),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
+      decoration: AppDecorations.card(radius: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: scrollable ? MainAxisSize.max : MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: isEdited ? AppColors.secondaryLight : AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '${page.pageNumber}페이지',
+              style: AppTextStyles.labelMedium(color: isEdited ? const Color(0xFF3E6F2E) : AppColors.primaryText),
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (scrollable) Expanded(child: SingleChildScrollView(child: body)) else body,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWidePage(TalePage page, bool isEdited) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 55, child: _buildImage(page, isEdited)),
+          const SizedBox(width: 22),
+          Expanded(flex: 45, child: _buildTextCard(page, isEdited, scrollable: true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNarrowPage(TalePage page, bool isEdited) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        children: [
+          AspectRatio(aspectRatio: 16 / 10, child: _buildImage(page, isEdited)),
+          const SizedBox(height: 16),
+          _buildTextCard(page, isEdited, scrollable: false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomBar() {
+    final total = _updatedTaleBook.pages.length;
+    final canPrev = _currentPage > 0;
+    final canNext = _currentPage < total - 1;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border, width: 2)),
+      ),
+      child: Row(
+        children: [
+          Opacity(
+            opacity: canPrev ? 1 : 0.4,
+            child: RoundIconButton(icon: Icons.chevron_left_rounded, tooltip: '이전 페이지', onTap: _goPrevPage),
+          ),
+          const SizedBox(width: 12),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(total, (i) {
+              final isCurrent = i == _currentPage;
+              final isEdited = _isEditedIndex(i);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isCurrent ? 22 : 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? AppColors.primary
+                      : (isEdited ? AppColors.secondary : AppColors.border),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(width: 12),
+          Opacity(
+            opacity: canNext ? 1 : 0.4,
+            child: RoundIconButton(icon: Icons.chevron_right_rounded, tooltip: '다음 페이지', onTap: _goNextPage),
+          ),
+          const SizedBox(width: 10),
+          Text('${_currentPage + 1} / $total', style: AppTextStyles.headingSmall()),
+          const Spacer(),
+          _SaveButton(loading: _isSaving, onTap: _isSaving ? null : _showSaveDialog),
+        ],
+      ),
+    );
+  }
+}
+
+class _SaveButton extends StatefulWidget {
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _SaveButton({required this.loading, required this.onTap});
+
+  @override
+  State<_SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends State<_SaveButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    const depth = 5.0;
+    final enabled = widget.onTap != null;
+    final down = _pressed && enabled;
+
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+      onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          transform: Matrix4.translationValues(0, down ? depth : 0, 0),
+          decoration: AppDecorations.primaryButton(radius: 20, depth: down ? 0 : depth),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.loading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.onPrimary),
+                )
+              else
+                const Icon(Icons.bookmark_add_rounded, size: 22, color: AppColors.onPrimary),
+              const SizedBox(width: 8),
+              Text('나의 책장에 넣기', style: AppTextStyles.button().copyWith(fontSize: 22)),
+            ],
+          ),
         ),
       ),
     );
