@@ -13,10 +13,12 @@
         </intent>
     </queries>
 
+    <!-- 3. 같은 와이파이·핫스팟의 노트북 서버(http://192.168.x.x:8000)에 접속하려면 http 허용이 필요 (안드로이드 9 이상은 기본 차단) -->
     <application
         android:label="fairytale_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

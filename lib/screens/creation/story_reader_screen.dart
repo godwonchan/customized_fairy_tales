@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,7 +32,7 @@ class StoryReaderScreen extends StatefulWidget {
 
 class _StoryReaderScreenState extends State<StoryReaderScreen>
     with SingleTickerProviderStateMixin {
-  static const String _baseUrl = 'http://localhost:8000';
+  static String get _baseUrl => AppConfig.serverUrl; // 실행 환경별 주소 (lib/config/app_config.dart)
   final PageController _pageController = PageController();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final Map<String, Uint8List> _ttsCache = {};
@@ -541,7 +542,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
     }
 
     return Image.network(
-      imageUrl,
+      AppConfig.resolve(imageUrl), // 서버가 적어 둔 127.0.0.1 주소를 지금 서버 주소로
       fit: BoxFit.contain,
       alignment: Alignment.center,
       loadingBuilder: (ctx, child, progress) {

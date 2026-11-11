@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import 'config/app_config.dart';
 import 'screens/home_screen.dart';
 import 'providers/favorites_provider.dart';
 import 'providers/font_size_provider.dart';
@@ -8,7 +9,9 @@ import 'screens/login_screen.dart';
 import 'screens/creation/custom_story_create_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig.load(); // 앱에서 입력해 둔 서버 주소 불러오기
   runApp(
     MultiProvider(
       providers: [

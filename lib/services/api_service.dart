@@ -5,16 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 
 class ApiService {
-  // ✅ 플랫폼별 자동 분기
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://127.0.0.1:8000';      // 크롬
-    }
-    // 안드로이드 에뮬레이터: 10.0.2.2 = Mac의 localhost
-    return 'http://10.0.2.2:8000';
-  }
+  // ✅ 실행 환경별 주소: 크롬 127.0.0.1, 에뮬레이터 10.0.2.2, 태블릿은 앱에서 입력한 주소 (lib/config/app_config.dart)
+  static String get baseUrl => AppConfig.serverUrl;
 
   static Future<List<dynamic>> getOriginalStories() async {
     final response = await http.get(Uri.parse('$baseUrl/stories/original'));

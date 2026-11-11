@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -79,7 +81,7 @@ class CustomStoryCreateScreen extends StatefulWidget {
 class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     with TickerProviderStateMixin {
   static const String _lumiImagePath = CrayongImages.wink;
-  static const String _baseUrl = 'http://localhost:8000';
+  static String get _baseUrl => AppConfig.serverUrl; // 실행 환경별 주소 (lib/config/app_config.dart)
   static const Color _purple = AppColors.secondaryDark;
   static const Color _deep = AppColors.textPrimary;
 
@@ -927,6 +929,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     }
     _addChild('다 그렸어!');
     setState(() => _stage = CreationStage.askName);
+    unawaited(_prepareCharacter(cat.id)); // 기다리지 않음 - 이름을 묻는 동안 서버가 처리
     final existing = _slotDescriptions[cat.id]?['name'];
     _addLumi(existing != null && existing.isNotEmpty
         ? '정말 멋지게 그렸어!\n이름은 그대로 "$existing"(으)로 할까, 아니면 새 이름을 알려줄래?'
@@ -934,6 +937,25 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _inputFocusNode.requestFocus();
     });
+  }
+
+  // 🧸 캐릭터 미리 그리기: '다 그렸어!'를 누르면 그림을 서버에 보내, 우리 모델 그림 서버가 캐릭터를 미리 완성해 두게 한다.
+  // 나중에 '우리 모델'로 동화를 만들면 이 시간(캐릭터 1명 약 30초)을 기다리지 않는다. gpt-image 로 만들면 쓰이지 않는다.
+  // 서버·그림 서버가 꺼져 있거나 실패해도 그리기에는 영향이 없다 (결과를 기다리지 않고 오류는 무시).
+  Future<void> _prepareCharacter(String id) async {
+    try {
+      final png = (_paths.isNotEmpty || _restoredBasePng[id] != null) ? await _captureCanvasToPng() : _slotPngBytes[id];
+      if (png == null) return;
+      await http
+          .post(
+            Uri.parse('$_baseUrl/api/story/prepare_characters'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'drawn_assets_base64': {id: base64Encode(png)}}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('캐릭터 미리 그리기 요청 실패 (무시): $e');
+    }
   }
 
   void _receiveName(String name, {bool silent = false}) {

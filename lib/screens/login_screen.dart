@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
@@ -254,10 +255,14 @@ class _LoginScreenState extends State<LoginScreen>
             child: child,
           );
         },
-        child: Image.asset(
-          CrayongImages.main,
-          height: 160,
-          fit: BoxFit.contain,
+        // 크레용을 길게 누르면 서버 주소 입력 창 (태블릿에서 노트북 서버 주소를 정할 때)
+        child: GestureDetector(
+          onLongPress: () => showServerSettings(context),
+          child: Image.asset(
+            CrayongImages.main,
+            height: 160,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

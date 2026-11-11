@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../../config/app_config.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -35,7 +36,7 @@ class StoryPreviewScreen extends StatefulWidget {
 }
 
 class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
-  static const String _baseUrl = 'http://localhost:8000';
+  static String get _baseUrl => AppConfig.serverUrl; // 실행 환경별 주소 (lib/config/app_config.dart)
   static const String _lumiImagePath = CrayongImages.wink;
   static const int _minPageCount = 1;
 
@@ -49,6 +50,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   static const Color _bg = AppColors.background;
 
   bool _isGenerating = false;
+  // 그림 그리는 방법: false = 기본(gpt-image), true = 우리 모델(Kaggle 그림 서버, 한 권에 약 5분)
+  bool _useOurModel = false;
   int _pageCount = 4;
   final TextEditingController _feedbackController = TextEditingController();
 
@@ -670,6 +673,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                     _buildStepBar(),
                     _buildPageCountPicker(),
                     Expanded(child: _buildStoryArea()),
+                    _buildEngineSwitch(),
                     _buildBottomButtons(),
                   ],
                 ),
@@ -1044,6 +1048,38 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     );
   }
 
+  // 그림 그리는 방법 전환: 기본(gpt-image) / 우리 모델 (서버가 요청의 engine 값으로 나눈다)
+  Widget _buildEngineSwitch() {
+    Widget option(String label, bool ourModel) {
+      final selected = _useOurModel == ourModel;
+      return GestureDetector(
+        onTap: _isGenerating ? null : () => setState(() => _useOurModel = ourModel),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          decoration: _card(radius: 14, color: selected ? _purple : Colors.white, edge: selected ? _purpleDark : _cardEdge),
+          child: Text(label, style: AppTextStyles.button(color: selected ? Colors.white : _purple).copyWith(fontSize: 16)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      child: Row(
+        children: [
+          const Icon(Icons.palette_rounded, color: _purple, size: 20),
+          const SizedBox(width: 6),
+          Text('그림 그리는 방법', style: AppTextStyles.headingSmall(color: _ink).copyWith(fontSize: 16)),
+          const Spacer(),
+          option('기본', false),
+          const SizedBox(width: 8),
+          option('우리 모델', true),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomButtons() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
@@ -1094,7 +1130,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       for (final id in characters)
         [Object.hashAll(widget.assetPngBytes[id] ?? const <int>[]), widget.aiDelegated[id] == true],
     ];
-    return jsonEncode([p['prompt'] ?? '', p['layout_type'] ?? 'single', characters, drawings]);
+    // 그림 그리는 방법이 바뀌면 그 방법으로 다시 그리도록 서명에 넣음 (기본은 넣지 않아 예전에 그린 그림 서명과 같음)
+    return jsonEncode([p['prompt'] ?? '', p['layout_type'] ?? 'single', characters, drawings, if (_useOurModel) 'local']);
   }
 
   bool _hasImage(int index) =>
@@ -1273,7 +1310,9 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '예쁜 그림과 이야기를 엮는 중이야. 잠깐만 기다려 줘!',
+                _useOurModel
+                    ? '우리 모델로 한 장씩 그리는 중이야. 5분쯤 걸리니 조금만 기다려 줘!'
+                    : '예쁜 그림과 이야기를 엮는 중이야. 잠깐만 기다려 줘!',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium(),
               ),
@@ -1297,6 +1336,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     final payload = {
       'drawn_assets_base64': drawnAssetsBase64,
       'asset_descriptions': widget.assetDescriptions, // 아이가 붙인 이름·특징
+      'engine': _useOurModel ? 'local' : 'openai', // 그림 그리는 방법 (기본: gpt-image)
       'pages': targetIndexes.map((idx) {
         final p = _storyPages[idx];
 

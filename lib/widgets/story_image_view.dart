@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import '../config/app_config.dart';
 
 class StoryImageView extends StatelessWidget {
   final String imagePath;
@@ -19,11 +19,8 @@ class StoryImageView extends StatelessWidget {
   // ✅ 플랫폼에 맞게 URL 자동 교체
   String get _resolvedPath {
     if (!_isNetworkImage) return imagePath;
-    if (kIsWeb) return imagePath; // 크롬은 그대로
-    // 안드로이드 에뮬레이터: localhost → 10.0.2.2
-    return imagePath
-        .replaceFirst('http://localhost:', 'http://10.0.2.2:')
-        .replaceFirst('http://127.0.0.1:', 'http://10.0.2.2:');
+    // 서버가 적어 둔 localhost·127.0.0.1 주소를 지금 서버 주소로 (크롬·에뮬레이터·태블릿 모두, lib/config/app_config.dart)
+    return AppConfig.resolve(imagePath);
   }
 
   @override

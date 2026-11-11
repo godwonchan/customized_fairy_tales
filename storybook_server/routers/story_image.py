@@ -14,6 +14,8 @@ from openai import AsyncOpenAI
 from PIL import Image
 from dotenv import load_dotenv
 
+from services.local_image_engine import generate_with_local_engine, prepare_characters
+
 # 🎯 1. .env 환경변수 직접 로드
 load_dotenv()
 
@@ -61,6 +63,8 @@ class StoryIllustrationBatchRequest(BaseModel):
     asset_images: Optional[Dict[str, str]] = None
     # 에셋 ID별 아이가 붙인 이름·특징 ({"hero": {"name": "...", "desc": "..."}})
     asset_descriptions: Optional[Dict[str, Dict[str, str]]] = None
+    # 그림 엔진: "openai"(gpt-image) | "local"(우리 모델, Kaggle 그림 서버). 없으면 .env 의 IMAGE_ENGINE (기본 openai)
+    engine: Optional[str] = None
 
     @property
     def assets(self) -> Dict[str, str]:
@@ -370,6 +374,23 @@ async def _generate_single_page(
         return PageIllustrationResponse(page_number=p.page_number, image_url="", error=str(e))
 
 
+_BACKGROUND: set = set()
+
+
+class PrepareCharactersRequest(BaseModel):
+    drawn_assets_base64: Dict[str, str]
+
+
+@router.post("/prepare_characters")
+async def prepare_story_characters(req: PrepareCharactersRequest):
+    """아이가 그림을 다 그렸을 때 앱이 보낸다: 우리 모델 그림 서버에 캐릭터 완성을 미리 맡긴다 (응답은 바로, 작업은 뒤에서).
+    gpt-image 로 만들 때는 쓰이지 않는다. 그림 서버 주소(LOCAL_IMAGE_URL)가 없으면 아무것도 하지 않는다."""
+    task = asyncio.create_task(prepare_characters(client, VISION_MODEL, req.drawn_assets_base64))
+    _BACKGROUND.add(task)                       # 붙잡아 두지 않으면 끝나기 전에 사라질 수 있다
+    task.add_done_callback(_BACKGROUND.discard)
+    return {"ok": True}
+
+
 @router.post("/generate_illustrations", response_model=StoryIllustrationBatchResponse)
 async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
     assets_map = req.assets
@@ -388,6 +409,21 @@ async def generate_story_illustrations(req: StoryIllustrationBatchRequest):
 
     hero_name, _ = _asset_name_and_desc((req.asset_descriptions or {}).get("hero"))
     design_sheets_by_id = await design_undrawn_assets(blueprints_by_id, req.asset_descriptions)
+
+    engine = (req.engine or os.getenv("IMAGE_ENGINE", "openai")).lower()
+    if engine == "local":
+        print("🖌️ [우리 모델] Kaggle 그림 서버로 그립니다", flush=True)
+        undrawn = {}
+        for k, info in (req.asset_descriptions or {}).items():
+            name, desc = _asset_name_and_desc(info)
+            if k not in blueprints_by_id and name:
+                undrawn[k] = f"'{name}' - {design_sheets_by_id.get(k) or desc or 'no description'}"
+        local_results = await generate_with_local_engine(
+            client, VISION_MODEL,
+            [{"page_number": p.page_number, "scene_prompt": link_story_tags(p.scene_prompt, req.asset_descriptions),
+              "layout_type": p.layout_type, "characters": p.active_asset_ids} for p in req.pages],
+            {k: b64 for k, b64 in assets_map.items() if k in blueprints_by_id}, blueprints_by_id, undrawn)
+        return StoryIllustrationBatchResponse(illustrations=[PageIllustrationResponse(**r) for r in local_results])
 
     page_tasks = [
         _generate_single_page(p, blueprints_by_id, hero_name, req.asset_descriptions, design_sheets_by_id)
