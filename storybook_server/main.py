@@ -19,6 +19,7 @@ from routers.story_image import router as story_image_router # [이미지 생성
 
 from fastapi.staticfiles import StaticFiles
 from routers.story_storage import router as story_storage_router # [보관함 라우터]
+from routers.avatar import router as avatar_router # [나를 닮은 주인공: 사진 특징 읽기]
 
 from app_core import (
     engine,
@@ -92,6 +93,7 @@ app.include_router(lumi_chat_router) # [lumi 대화]
 app.include_router(story_generation_router) # [스토리 생성]
 app.include_router(story_image_router) # [이미지 생성]
 app.include_router(story_storage_router) # [보관함 라우터]
+app.include_router(avatar_router) # [나를 닮은 주인공]
 
 revision_jobs: Dict[str, Dict[str, Any]] = {}
 
