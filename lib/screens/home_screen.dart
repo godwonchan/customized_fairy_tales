@@ -49,6 +49,8 @@ class _AppShellState extends State<AppShell> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      // 홈의 검색창을 눌러 키보드가 올라와도 화면을 줄이지 않는다 (줄이면 카드·아래 메뉴가 넘침, 검색창은 맨 위라 가려지지 않음)
+      resizeToAvoidBottomInset: false,
       body: Column(
         children: [
           Expanded(

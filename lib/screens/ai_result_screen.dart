@@ -145,7 +145,8 @@ class _AIResultScreenState extends State<AIResultScreen>
         return Dialog(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
-            child: Padding(
+            // 키보드가 올라와 창이 낮아지면 넘치지 않고 스크롤되게 함
+            child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

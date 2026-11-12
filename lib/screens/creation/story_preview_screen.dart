@@ -613,8 +613,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
         borderRadius: BorderRadius.circular(22),
         child: Column(
           children: [
-            // 제목줄을 끌어서 창을 옮김
-            GestureDetector(
+            // 제목줄을 끌어서 창을 옮김 (키보드가 올라와 창이 낮아지면 숨겨 대화·입력칸 자리를 남김)
+            if (size.height >= 230) GestureDetector(
               onPanUpdate: (d) => _lumi.moveWindow(_keepInside(area, size, (_lumi.windowPosition ?? pos) + d.delta)),
               child: Container(
                 color: _purple,
@@ -667,15 +667,21 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           body: SafeArea(
             child: Stack(
               children: [
-                Column(
-                  children: [
-                    _buildTopBar(),
-                    _buildStepBar(),
-                    _buildPageCountPicker(),
-                    Expanded(child: _buildStoryArea()),
-                    _buildEngineSwitch(),
-                    _buildBottomButtons(),
-                  ],
+                // 키보드가 올라와 세로 공간이 좁아지면 줄거리만 남기고 나머지 줄은 숨김 (고정 높이 줄들이 넘치지 않게)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxHeight < 430;
+                    return Column(
+                      children: [
+                        _buildTopBar(),
+                        if (!compact) _buildStepBar(),
+                        if (!compact) _buildPageCountPicker(),
+                        Expanded(child: _buildStoryArea()),
+                        if (!compact) _buildEngineSwitch(),
+                        if (!compact) _buildBottomButtons(),
+                      ],
+                    );
+                  },
                 ),
                 Positioned.fill(
                   child: LayoutBuilder(

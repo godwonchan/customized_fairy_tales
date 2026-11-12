@@ -489,8 +489,12 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     final width = MediaQuery.of(context).size.width;
     final isTablet = width >= 700;
 
+    // 키보드가 올라와도 화면 전체를 줄이지 않고(줄이면 그림판 쪽이 넘침), 글을 쓰는 오른쪽 패널만 키보드 위로 올린다
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
           children: [
@@ -506,7 +510,14 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
                     Expanded(child: _buildCanvasPanel()),
                     if (_showPreviewPanel) ...[
                       const SizedBox(width: 14),
-                      SizedBox(width: isTablet ? 340 : 260, child: _buildPreviewPanel()),
+                      SizedBox(
+                        width: isTablet ? 340 : 260,
+                        child: AnimatedPadding(
+                          duration: const Duration(milliseconds: 150),
+                          padding: EdgeInsets.only(bottom: keyboardInset > 16 ? keyboardInset - 16 : 0),
+                          child: _buildPreviewPanel(),
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -1030,6 +1041,8 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
 
   Widget _buildPreviewPanel() {
     final canApply = _previewRevisedPages != null && !_isGenerating && !_isApplyingAsync;
+    // 키보드가 올라온 동안에는 탭과 아래 버튼을 숨겨 대화 내용과 입력칸이 들어갈 자리를 만든다
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Container(
       decoration: AppDecorations.card(radius: 24),
       child: Column(
@@ -1049,7 +1062,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
               ],
             ),
           ),
-          Padding(
+          if (!keyboardOpen) Padding(
             padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
             child: Row(
               children: [
@@ -1061,7 +1074,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
           ),
           const Divider(height: 1, color: AppColors.border),
           Expanded(child: _showPreviewTab ? _buildPreviewContent() : _buildChatContent()),
-          Padding(
+          if (!keyboardOpen) Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
