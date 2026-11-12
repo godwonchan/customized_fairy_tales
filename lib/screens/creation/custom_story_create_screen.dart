@@ -114,6 +114,12 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   List<String> _currentHints = [];
   final math.Random _random = math.Random();
 
+  // ── 어린 아이(4~7세, 글을 못 읽어도) 쉽게 쓰기 ──
+  int _choiceOffset = 0; // 고르기 판: '다른 것'을 누를 때마다 다음 3개를 보여 줌
+  bool _typingMode = false; // false: 큰 마이크로 말하기(기본), true: 키보드로 쓰기(보호자용)
+  Timer? _idleTimer; // 아이가 한동안 답이 없으면 크레용이 마지막 말을 다시 들려줌
+  int _idleNudges = 0;
+
   // ── 갤러리 접기/펼치기 및 캔버스 화면 맞춤 ──
   bool _isGalleryCollapsed = false; // 갤러리 접힘 상태 플래그
   final TransformationController _transformCtrl = TransformationController();
@@ -359,7 +365,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       if (widget.initialStoryData != null) {
         _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐');
       } else {
-        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n먼저 뭐부터 그릴래?');
+        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n먼저 주인공 그림을 눌러 줘!');
       }
     });
   }
@@ -369,6 +375,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
   @override
   void dispose() {
+    _idleTimer?.cancel();
     _transformCtrl.dispose();
     _speech.stop();
     _audioPlayer.dispose();
@@ -418,6 +425,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   }
 
   void _haltAudio() {
+    _idleTimer?.cancel(); // 다른 화면으로 넘어간 동안 다시 말하지 않게
     _ttsSessionId++;
     _audioPlayer.stop();
     if (_isListening) {
@@ -441,11 +449,13 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     setState(() => _messages.add(ChatMessage(ChatRole.lumi, text)));
     _scrollToBottom();
     _speakLumi(text, directBase64: audioB64);
+    _restartIdleTimer();
   }
 
   void _addChild(String text) {
     setState(() => _messages.add(ChatMessage(ChatRole.child, text)));
     _scrollToBottom();
+    _restartIdleTimer();
   }
 
   Future<void> _ensureSpeechInitialized() async {
@@ -465,6 +475,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     await _ensureSpeechInitialized();
     if (!mounted) return;
     if (!_speechAvailable) {
+      setState(() => _typingMode = true); // 마이크를 못 쓰면 키보드로라도 답할 수 있게
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('마이크 권한을 허용해 줘!')),
       );
@@ -1107,11 +1118,14 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     if (key == null) return;
     final pool = List<String>.from(_hintPoolFor(key))..shuffle(_random);
     _addChild('잘 모르겠어');
+    final picks = pool.take(3).toList();
     setState(() {
       _showHints = true;
-      _currentHints = pool.take(3).toList();
+      _currentHints = picks;
     });
-    _addLumi('그럼 이런 건 어때? 🤔\n마음에 드는 걸 골라도 되고,\n다른 생각이 나면 그냥 말해줘!');
+    // 글을 못 읽어도 고를 수 있게, 크레용이 보기를 번호와 함께 소리 내어 읽어 줌
+    final spoken = [for (int i = 0; i < picks.length; i++) '${i + 1}번, ${picks[i]}'].join('\n');
+    _addLumi('그럼 이런 건 어때?\n$spoken\n마음에 드는 번호를 눌러도 되고, 다른 생각을 말해도 돼!');
   }
 
   Future<void> _answerStory(String answer, {bool byLumi = false, bool fromHint = false}) async {
@@ -1666,14 +1680,30 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   }
 
   Widget _buildWorkspace() {
-    return Column(
-      children: [
-        _buildGallery(),
-        const SizedBox(height: 14),
-        Expanded(child: _buildCanvasArea()),
-        const SizedBox(height: 14),
-        _buildDrawingDock(),
-      ],
+    // 키보드가 올라오면 세로 공간이 크게 줄어든다 (갤럭시탭 가로 화면에서 키보드가 화면의 절반 이상).
+    // 고정 높이인 그림 모음·도구 줄이 넘치지 않도록 남은 높이에 맞춰 접거나 숨긴다.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final showGallery = h >= 150;
+        final compactGallery = h < 420;
+        final showDock = h >= 300;
+        // 고르는 단계에서는 도화지 대신 큰 그림 카드 판을 보여 줌 (글을 몰라도 그림을 보고 누르면 됨)
+        final choosing = _stage == CreationStage.choosing;
+        return Column(
+          children: [
+            if (showGallery) ...[
+              _buildGallery(forceCollapsed: compactGallery),
+              const SizedBox(height: 14),
+            ],
+            Expanded(child: choosing ? _buildChoiceBoard() : _buildCanvasArea()),
+            if (showDock && !choosing) ...[
+              const SizedBox(height: 14),
+              _buildDrawingDock(),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -1772,6 +1802,24 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   ],
                 ),
               ),
+              // 말하기 ↔ 키보드로 쓰기 바꾸기 (키보드는 보호자가 도와줄 때)
+              _Pressable(
+                onTap: () {
+                  if (_isListening) {
+                    _speech.stop();
+                    _isListening = false;
+                  }
+                  setState(() => _typingMode = !_typingMode);
+                  if (!_typingMode) FocusScope.of(context).unfocus();
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: _chunky(color: Colors.white, edge: _purpleDark, shape: BoxShape.circle, depth: 4),
+                  child: Icon(_typingMode ? Icons.mic_rounded : Icons.keyboard_rounded, size: 22, color: _purple),
+                ),
+              ),
+              const SizedBox(width: 8),
               _Pressable(
                 onTap: () {
                   final last = _messages.lastWhere(
@@ -1881,6 +1929,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   }
 
   List<QuickReply> _buildQuickReplies() {
+    // 고르는 단계는 오른쪽의 큰 그림 카드 판에서 고름 (작은 글자 버튼을 여러 개 늘어놓지 않음)
+    if (_stage == CreationStage.choosing) return [];
     final cat = currentCat;
     switch (_stage) {
       case CreationStage.choosing:
@@ -1979,8 +2029,13 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         }
         final accent = _noteColor(key);
         return [
-          for (final hint in _currentHints)
-            QuickReply(label: hint, emoji: '💡', color: accent, onTap: () => _answerStory(hint, fromHint: true)),
+          for (int i = 0; i < _currentHints.length; i++)
+            QuickReply(
+              label: _currentHints[i],
+              emoji: const ['1️⃣', '2️⃣', '3️⃣'][i % 3],
+              color: accent,
+              onTap: () => _answerStory(_currentHints[i], fromHint: true),
+            ),
           QuickReply(label: '크레용이 정해줘', emoji: '🎲', color: _purple, primary: true, onTap: () => _answerStory('', byLumi: true)),
         ];
     }
@@ -2043,6 +2098,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             : _stage == CreationStage.askDesc
                 ? '어떤 특별한 점이 있는지 알려줘!'
                 : '크레용에게 말해봐!';
+    if (!_typingMode) return _buildVoiceRow();
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
       color: Colors.white,
@@ -2123,14 +2179,16 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
-  Widget _buildGallery() {
+  // forceCollapsed: 세로 공간이 좁을 때(키보드가 올라왔을 때) 아이가 접지 않았어도 한 줄로 접어서 보여 줌
+  Widget _buildGallery({bool forceCollapsed = false}) {
     final total = _allCategories.length;
     final count = _drawnOrder.length;
+    final collapsed = _isGalleryCollapsed || forceCollapsed;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      padding: EdgeInsets.fromLTRB(16, 10, 14, _isGalleryCollapsed ? 10 : 14),
+      padding: EdgeInsets.fromLTRB(16, 10, 14, collapsed ? 10 : 14),
       decoration: _card(radius: 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2173,7 +2231,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               const SizedBox(width: 6),
 
               // 🔼 [신규 추가] 갤러리 접기/펼치기 토글 버튼
-              _Pressable(
+              if (!forceCollapsed) _Pressable(
                 onTap: () {
                   setState(() => _isGalleryCollapsed = !_isGalleryCollapsed);
                   // 갤러리가 접히거나 펼쳐진 직후 캔버스 뷰포트 크기에 맞춰 도화지 자동 재배치
@@ -2205,7 +2263,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           ),
 
           // ── 슬롯 목록 (접혔을 때는 완전히 숨겨져 캔버스 공간 확보) ──
-          if (!_isGalleryCollapsed) ...[
+          if (!collapsed) ...[
             const SizedBox(height: 12),
             SizedBox(
               height: 96,
@@ -2643,7 +2701,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                 // ── AI 위임 안내 ──
                 if (isAi)
                   IgnorePointer(
-                    child: Center(
+                    child: _FitCenter(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
                         decoration: _chunky(color: Colors.white, edge: _cardEdge, radius: 26, depth: 5, border: _cardLine),
@@ -2662,7 +2720,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   )
                 else if (!hasCanvasDrawing)
                   IgnorePointer(
-                    child: Center(
+                    child: _FitCenter(
                       child: AnimatedBuilder(
                         animation: _floatingAnim,
                         builder: (context, child) => Transform.translate(offset: Offset(0, _floatingAnim.value), child: child),
@@ -2779,7 +2837,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     return Stack(
       children: [
         const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
-        Center(
+        _FitCenter(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2809,6 +2867,193 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       onTap: onTap,
       child: SizedBox(width: 40, height: 40, child: Icon(icon, size: 22, color: color)),
     );
+  }
+
+  // ── 🃏 고르기 판: 한 번에 큰 그림 카드 3개까지만 보여 줌 ──
+  Widget _buildChoiceBoard() {
+    final remaining = _remainingCategories;
+    final heroFirst = !_heroDrawn; // 주인공을 아직 안 그렸으면 주인공 카드 하나만
+    final List<StoryCategory> shown;
+    if (heroFirst) {
+      shown = [_catById('hero')];
+    } else if (remaining.length <= 3) {
+      shown = remaining;
+    } else {
+      final start = _choiceOffset % remaining.length;
+      shown = [for (int i = 0; i < 3; i++) remaining[(start + i) % remaining.length]];
+    }
+    final current = _currentId;
+
+    return Container(
+      decoration: _card(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+            _FitCenter(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(heroFirst ? '주인공을 그려 보자!' : '무엇을 그릴까?', style: const TextStyle(fontSize: 28, color: _ink)),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final c in shown)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 9),
+                          child: _choiceCard(
+                            emoji: c.emoji.isEmpty ? '🎨' : c.emoji,
+                            label: _customSubject[c.id] ?? c.title,
+                            color: c.color,
+                            onTap: () => _selectCategory(c.id),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (!heroFirst) ...[
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (remaining.length > 3)
+                          _choiceCard(emoji: '🔄', label: '다른 것', color: const Color(0xFF8A7360), small: true, onTap: () => setState(() => _choiceOffset += 3)),
+                        if (remaining.isNotEmpty) ...[
+                          const SizedBox(width: 12),
+                          _choiceCard(emoji: '✏️', label: '내가 정할래', color: const Color(0xFFEE8C6E), small: true, onTap: _startCustom),
+                        ],
+                        if (current != null) ...[
+                          const SizedBox(width: 12),
+                          _choiceCard(emoji: '🖍️', label: '더 그리기', color: const Color(0xFFE0A126), small: true, onTap: _continueDrawing),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    _Pressable(
+                      onTap: _isLumiThinking
+                          ? null
+                          : () {
+                              _addChild('이제 동화 만들래!');
+                              _proceedToStoryReview();
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 16),
+                        decoration: _chunky(color: _yellow, radius: 36, depth: 6),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('📖', style: TextStyle(fontSize: 34)),
+                            SizedBox(width: 12),
+                            Text('동화 만들기', style: TextStyle(fontSize: 26, color: _ink)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _choiceCard({
+    required String emoji,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    bool small = false,
+  }) {
+    return _Pressable(
+      onTap: _isLumiThinking ? null : onTap,
+      child: Container(
+        width: small ? 132 : 176,
+        height: small ? 92 : 196,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: _chunky(
+          color: _tint(color, small ? 0.9 : 0.82),
+          edge: _tint(color, 0.45),
+          radius: small ? 22 : 30,
+          depth: small ? 4 : 6,
+          border: color,
+          borderWidth: 3,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(emoji, style: TextStyle(fontSize: small ? 32 : 76)),
+            SizedBox(height: small ? 2 : 10),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: small ? 16 : 23, color: _darken(color, 0.18)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── 🎤 말로 답하기: 큰 마이크 버튼 하나 (키보드는 대화창 위의 버튼으로 바꿀 수 있음) ──
+  Widget _buildVoiceRow() {
+    final heard = _chatInputCtrl.text.trim();
+    final label = _isListening ? (heard.isEmpty ? '듣고 있어! 말해 봐' : heard) : '눌러서 말해 줘';
+    const listenColor = Color(0xFFEE8C6E);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+      color: Colors.white,
+      child: Row(
+        children: [
+          _Pressable(
+            onTap: _isLumiThinking ? null : _toggleVoiceInput,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 72,
+              height: 72,
+              decoration: _chunky(
+                color: _isListening ? listenColor : _purple,
+                edge: _isListening ? const Color(0xFFC9684B) : _purpleDark,
+                shape: BoxShape.circle,
+                depth: 5,
+              ),
+              child: Icon(_isListening ? Icons.mic_rounded : Icons.mic_none_rounded, color: Colors.white, size: 40),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 19, color: _isListening ? const Color(0xFFC9684B) : _sub),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── ⏳ 기다려 주기: 답을 기다리는 동안 조용하면 마지막 말을 다시 들려줌 (최대 2번, 저장해 둔 음성을 다시 씀) ──
+  void _restartIdleTimer({bool resetCount = true}) {
+    _idleTimer?.cancel();
+    if (resetCount) _idleNudges = 0;
+    _idleTimer = Timer(const Duration(seconds: 25), _onIdle);
+  }
+
+  void _onIdle() {
+    if (!mounted) return;
+    // 그리는 중이거나, 말하는 중·쓰는 중·창이 떠 있는 중에는 방해하지 않음
+    if (_stage == CreationStage.drawing || _isLumiThinking || _isListening || _isDialogShowing) return;
+    if (_inputFocusNode.hasFocus || _idleNudges >= 2) return;
+    final last = _messages.lastWhere((m) => m.role == ChatRole.lumi, orElse: () => ChatMessage(ChatRole.lumi, ''));
+    if (last.text.isEmpty) return;
+    _idleNudges++;
+    _speakLumi(last.text);
+    _restartIdleTimer(resetCount: false);
   }
 
   Widget _buildDrawingDock() {
@@ -2975,6 +3220,22 @@ class _PressableState extends State<_Pressable> {
             child: widget.child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// 가운데 안내 그림·글: 자리가 좁으면(키보드가 올라왔을 때) 넘치지 않고 통째로 작아진다
+class _FitCenter extends StatelessWidget {
+  final Widget child;
+  const _FitCenter({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: FittedBox(fit: BoxFit.scaleDown, child: child),
       ),
     );
   }
