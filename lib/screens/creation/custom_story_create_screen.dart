@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
 import 'story_preview_screen.dart';
+import 'avatar_maker_screen.dart';
 import '../../theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -159,6 +160,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   final List<ChatMessage> _messages = [];
   bool _isLumiThinking = false;
   final ScrollController _chatScrollCtrl = ScrollController();
+  final ScrollController _stageScrollCtrl = ScrollController(); // 크레용 무대(말하기 방식)용
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
@@ -365,7 +367,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       if (widget.initialStoryData != null) {
         _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐');
       } else {
-        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n먼저 주인공 그림을 눌러 줘!');
+        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n주인공을 직접 그릴까, 나를 닮게 만들까?');
       }
     });
   }
@@ -384,6 +386,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     _chatInputCtrl.dispose();
     _inputFocusNode.dispose();
     _chatScrollCtrl.dispose();
+    _stageScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -436,6 +439,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 크레용 무대에서는 새 말이 맨 위(크레용과 말풍선)에 나오므로 위로 올림
+      if (_stageScrollCtrl.hasClients) _stageScrollCtrl.jumpTo(0);
       if (!_chatScrollCtrl.hasClients) return;
       _chatScrollCtrl.animateTo(
         _chatScrollCtrl.position.maxScrollExtent,
@@ -1667,7 +1672,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('📖', style: TextStyle(fontSize: 18)),
+                  Icon(Icons.menu_book_rounded, size: 22, color: ready ? _ink : const Color(0xFFBFAE9C)),
                   const SizedBox(width: 8),
                   Text('이야기 짓기', style: TextStyle(fontSize: 17, color: ready ? _ink : const Color(0xFFBFAE9C))),
                 ],
@@ -1707,7 +1712,217 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
-  Widget _buildChatPanel() {
+  // 말하기(기본): 크레용 무대 / 키보드로 쓰기(보호자용): 글자 대화창
+  Widget _buildChatPanel() => _typingMode ? _buildChatPanelClassic() : _buildKidStage();
+
+  void _toggleTypingMode() {
+    if (_isListening) {
+      _speech.stop();
+      _isListening = false;
+    }
+    setState(() => _typingMode = !_typingMode);
+    if (!_typingMode) FocusScope.of(context).unfocus();
+  }
+
+  // ── 🐲 크레용 무대: 글자 대화 기록 대신, 크레용이 지금 하는 말 한 가지와 큰 그림 답 버튼만 보여 줌 ──
+  // (글을 못 읽는 아이도 크레용 목소리를 듣고, 그림을 보고 누르면 됨. 말풍선을 누르면 다시 들려줌)
+  Widget _buildKidStage() {
+    final replies = _isLumiThinking ? <QuickReply>[] : _kidReplies(_buildQuickReplies());
+    final lastLumi = _messages.lastWhere(
+      (m) => m.role == ChatRole.lumi,
+      orElse: () => ChatMessage(ChatRole.lumi, ''),
+    );
+    return Container(
+      decoration: _card(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                color: const Color(0xFFFFFDF7),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final compact = c.maxHeight < 320; // 세로 공간이 좁으면 크레용을 작게
+                    final double halfWidth = (c.maxWidth - 28 - 10) / 2;
+                    return Stack(
+                      children: [
+                        SingleChildScrollView(
+                          controller: _stageScrollCtrl,
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                          child: Column(
+                            children: [
+                              AnimatedBuilder(
+                                animation: _floatingAnim,
+                                builder: (context, child) =>
+                                    Transform.translate(offset: Offset(0, _floatingAnim.value), child: child),
+                                child: Image.asset(
+                                  _isLumiThinking ? CrayongImages.drawing : CrayongImages.main,
+                                  height: compact ? 64 : 124,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _AppearIn(
+                                key: ValueKey('say_${_messages.length}_$_isLumiThinking'),
+                                child: _buildSpeechBubble(_isLumiThinking ? '음… 생각하고 있어!' : lastLumi.text),
+                              ),
+                              if (replies.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _AppearIn(
+                                  key: ValueKey('tiles_${_messages.length}_${_stage.name}_${_currentId ?? ''}_$_showHints'),
+                                  delay: const Duration(milliseconds: 180),
+                                  child: Wrap(
+                                    spacing: 10,
+                                    runSpacing: 14,
+                                    alignment: WrapAlignment.center,
+                                    children: [for (final r in replies) _buildAnswerTile(r, halfWidth)],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        // 보호자용: 키보드로 쓰는 글자 대화창으로 바꾸기
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: _Pressable(
+                            onTap: _toggleTypingMode,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: _cardLine, width: 2),
+                              ),
+                              child: const Icon(Icons.keyboard_rounded, size: 20, color: Color(0xFFBFAE9C)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            _buildInputRow(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 크레용 무대에서는 답 버튼 수를 줄임: 그리는 중의 도움 버튼 두 개("어떤 색이 어울릴까?", "그리기 너무 어려워!")를 "도와줘" 하나로
+  List<QuickReply> _kidReplies(List<QuickReply> all) {
+    return [
+      for (final r in all)
+        if (r.label == '그리기 너무 어려워!')
+          QuickReply(label: '도와줘', emoji: 'help', color: r.color, onTap: r.onTap)
+        else if (r.label != '어떤 색이 어울릴까?')
+          r,
+    ];
+  }
+
+  Widget _buildSpeechBubble(String text) {
+    return GestureDetector(
+      onTap: _isLumiThinking || text.isEmpty ? null : () => _speakLumi(text),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 14, 10, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8E1), // 흰 종이 대신 따뜻한 크림색 말풍선
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: const Color(0xFFF2D27A), width: 2.5),
+          boxShadow: const [BoxShadow(color: Color(0xFFF2D27A), offset: Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              // 딱딱한 고딕 대신 앱 제목에 쓰는 손글씨 글꼴로 크게
+              child: Text(
+                text,
+                style: GoogleFonts.poorStory(fontSize: 25, height: 1.35, color: _ink),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: _chunky(color: _tint(_purple, 0.85), edge: _tint(_purple, 0.6), shape: BoxShape.circle, depth: 3),
+              child: const Icon(Icons.volume_up_rounded, color: _purple, size: 26),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 답 버튼: 그림(이모지)을 크게, 글자는 작게. 긴 문장(이야기 보기)은 한 줄을 다 쓰는 넓은 버튼으로
+  Widget _buildAnswerTile(QuickReply r, double halfWidth) {
+    final enabled = r.onTap != null;
+    final accent = r.color ?? _purple;
+    final bool wide = r.label.length > 11;
+    final Color bg = !enabled ? const Color(0xFFFFF3DC) : (r.primary ? accent : _tint(accent, 0.86));
+    final Color fg = !enabled ? const Color(0xFFBFAE9C) : (r.primary ? _onColor(accent) : _darken(accent, 0.2));
+    final deco = _chunky(
+      color: bg,
+      edge: !enabled ? const Color(0xFFE6D3AE) : (r.primary ? null : _tint(accent, 0.5)),
+      radius: 24,
+      depth: 5,
+      border: enabled ? accent : _cardLine,
+      borderWidth: 3,
+    );
+    // 기기마다 모양이 다른 이모지 대신, 앱 색에 맞춘 스티커 아이콘을 씀 (짝이 없는 이모지만 그대로)
+    final iconData = _iconForEmoji(r.emoji);
+    final Widget emoji = iconData != null
+        ? _StickerIcon(
+            icon: iconData,
+            color: enabled ? accent : const Color(0xFFD9C7A5),
+            size: wide ? 42 : 52,
+            inverted: enabled && r.primary,
+          )
+        : Text(r.emoji ?? '👉', style: TextStyle(fontSize: wide ? 30 : 38));
+    return _Pressable(
+      onTap: r.onTap,
+      child: wide
+          ? Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: deco,
+              child: Row(
+                children: [
+                  emoji,
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(r.label, maxLines: 3, style: TextStyle(fontSize: 17, height: 1.35, color: fg))),
+                ],
+              ),
+            )
+          : Container(
+              width: halfWidth,
+              height: 98,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: deco,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  emoji,
+                  const SizedBox(height: 4),
+                  Text(
+                    r.label,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16, height: 1.2, color: fg),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildChatPanelClassic() {
     final replies = _isLumiThinking ? <QuickReply>[] : _buildQuickReplies();
     return Container(
       decoration: _card(),
@@ -2196,7 +2411,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
           // ── 상단 요약 바 (진행도 + 메모 + 접기/펼치기 토글) ──
           Row(
             children: [
-              const Text('🖼️', style: TextStyle(fontSize: 18)),
+              const Icon(Icons.photo_library_rounded, size: 22, color: AppColors.primaryText),
               const SizedBox(width: 6),
               const Text('내 그림 모음', style: TextStyle(fontSize: 17, color: _ink)),
               const SizedBox(width: 10),
@@ -2319,7 +2534,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('📜', style: TextStyle(fontSize: 15)),
+            Icon(Icons.sticky_note_2_rounded, size: 18, color: count > 0 ? const Color(0xFFB07A00) : _sub),
             const SizedBox(width: 4),
             Text('이야기 메모 $count', style: TextStyle(fontSize: 13, color: count > 0 ? const Color(0xFFB07A00) : _sub)),
           ],
@@ -2488,7 +2703,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                       child: isAi
                           ? const Center(child: Text('🪄', style: TextStyle(fontSize: 26)))
                           // 🎯 [수정] 선 좌표가 있으면 Painter로, 선 좌표가 없고 복원된 PNG가 있으면 Image.memory로 표시
-                          : paths.isNotEmpty
+                          // (꾸민 주인공처럼 밑그림이 있으면 덧그린 선만 보이지 않게 완성된 PNG를 보여 줌)
+                          : paths.isNotEmpty && _restoredBasePng[id] == null
                               ? Container(color: Colors.white, child: CustomPaint(painter: MiniThumbnailPainter(paths), size: Size.infinite))
                               : pngBytes != null
                                   ? Container(
@@ -2895,7 +3111,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(heroFirst ? '주인공을 그려 보자!' : '무엇을 그릴까?', style: const TextStyle(fontSize: 28, color: _ink)),
+                  Text(heroFirst ? '주인공을 만들어 보자!' : '무엇을 그릴까?', style: const TextStyle(fontSize: 28, color: _ink)),
                   const SizedBox(height: 18),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2904,10 +3120,23 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 9),
                           child: _choiceCard(
-                            emoji: c.emoji.isEmpty ? '🎨' : c.emoji,
-                            label: _customSubject[c.id] ?? c.title,
+                            emoji: heroFirst ? '🖍️' : (c.emoji.isEmpty ? '🎨' : c.emoji),
+                            icon: heroFirst ? Icons.brush_rounded : c.icon,
+                            label: heroFirst ? '직접 그리기' : (_customSubject[c.id] ?? c.title),
                             color: c.color,
                             onTap: () => _selectCategory(c.id),
+                          ),
+                        ),
+                      // 주인공 단계의 두 번째 갈래: 그림 버튼으로 나를 닮은 주인공 꾸미기
+                      if (heroFirst)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 9),
+                          child: _choiceCard(
+                            emoji: '🧒',
+                            icon: Icons.face_retouching_natural_rounded,
+                            label: '나를 닮게 만들기',
+                            color: const Color(0xFF4F93C2),
+                            onTap: _openAvatarMaker,
                           ),
                         ),
                     ],
@@ -2943,7 +3172,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('📖', style: TextStyle(fontSize: 34)),
+                            _StickerIcon(icon: Icons.menu_book_rounded, color: AppColors.primaryText, size: 48, inverted: true),
                             SizedBox(width: 12),
                             Text('동화 만들기', style: TextStyle(fontSize: 26, color: _ink)),
                           ],
@@ -2960,13 +3189,45 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
+  // 🧒 나를 닮은 주인공 만들기: 꾸민 캐릭터를 주인공 그림 자리에 넣고, 이후는 직접 그렸을 때와 같은 흐름
+  Future<void> _openAvatarMaker() async {
+    if (_isLumiThinking) return;
+    _haltAudio();
+    final result = await Navigator.push<AvatarResult>(
+      context,
+      MaterialPageRoute(builder: (_) => const AvatarMakerScreen()),
+    );
+    if (!mounted) return;
+    if (result == null) {
+      _restartIdleTimer();
+      return;
+    }
+    _addChild('나를 닮은 주인공을 만들었어!');
+    await _selectCategory('hero', fromChip: false, announce: false);
+    if (!mounted) return;
+    setState(() {
+      _paths.clear();
+      _redoStack.clear();
+      _slotPaths['hero'] = [];
+      _restoredBasePng['hero'] = result.png; // 도화지 가운데에 밑그림으로 깔림 (위에 더 그릴 수 있음)
+      _slotPngBytes['hero'] = result.png;
+      _slotAiDelegated['hero'] = false;
+      _slotDescriptions['hero'] = {'name': '', 'desc': result.description};
+    });
+    await _persistSlotPng('hero', result.png);
+    await _persistAllMetadata();
+    _addLumi('우와, 정말 멋진 주인공이야!\n위에 더 그려도 돼.\n다 됐으면 "다 그렸어!"를 눌러 줘');
+  }
+
   Widget _choiceCard({
     required String emoji,
     required String label,
     required Color color,
     required VoidCallback onTap,
     bool small = false,
+    IconData? icon,
   }) {
+    final iconData = icon ?? _iconForEmoji(emoji);
     return _Pressable(
       onTap: _isLumiThinking ? null : onTap,
       child: Container(
@@ -2984,7 +3245,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(emoji, style: TextStyle(fontSize: small ? 32 : 76)),
+            if (iconData != null)
+              _StickerIcon(icon: iconData, color: color, size: small ? 42 : 100)
+            else
+              Text(emoji, style: TextStyle(fontSize: small ? 32 : 76)),
             SizedBox(height: small ? 2 : 10),
             Text(
               label,
@@ -3220,6 +3484,76 @@ class _PressableState extends State<_Pressable> {
             child: widget.child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// 이모지 → 스티커 아이콘 짝 (없으면 null: 이모지를 그대로 보여 줌)
+IconData? _iconForEmoji(String? emoji) {
+  if (emoji == null) return null;
+  const map = <String, IconData>{
+    'help': Icons.volunteer_activism_rounded,
+    '✅': Icons.check_rounded,
+    '🎨': Icons.palette_rounded,
+    '🥺': Icons.volunteer_activism_rounded,
+    '🪄': Icons.auto_fix_high_rounded,
+    '🔄': Icons.autorenew_rounded,
+    '👍': Icons.thumb_up_rounded,
+    '🖍': Icons.brush_rounded,
+    '⏭': Icons.skip_next_rounded,
+    '↩': Icons.undo_rounded,
+    '✏': Icons.edit_rounded,
+    '🙌': Icons.celebration_rounded,
+    '🤔': Icons.question_mark_rounded,
+    '🎲': Icons.casino_rounded,
+    '1⃣': Icons.looks_one_rounded,
+    '2⃣': Icons.looks_two_rounded,
+    '3⃣': Icons.looks_3_rounded,
+    '📖': Icons.menu_book_rounded,
+    '🧒': Icons.face_rounded,
+  };
+  return map[emoji.replaceAll('️', '')]; // 이모지 뒤에 붙는 표시 문자는 떼고 찾음
+}
+
+// 스티커 아이콘: 갈색 테두리의 동그란 색 바탕 + 흰 그림 (크레용 테마의 스티커 버튼과 같은 느낌)
+class _StickerIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+  final bool inverted; // 색 바탕 버튼 위에서는 흰 바탕 + 색 그림으로
+
+  const _StickerIcon({required this.icon, required this.color, required this.size, this.inverted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: inverted ? Colors.white : color,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFF4A3728), width: size * 0.055),
+        boxShadow: [BoxShadow(color: const Color(0x334A3728), offset: Offset(0, size * 0.07))],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(icon, size: size * 0.58, color: inverted ? color : Colors.white),
+          // 왼쪽 위의 작은 반짝임
+          Positioned(
+            top: size * 0.13,
+            left: size * 0.2,
+            child: Container(
+              width: size * 0.17,
+              height: size * 0.09,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: inverted ? 0.0 : 0.55),
+                borderRadius: BorderRadius.circular(size),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

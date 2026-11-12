@@ -6,12 +6,26 @@ import 'package:flutter/material.dart';
 import '../../config/app_config.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'custom_story_create_screen.dart' show ChatRole, QuickReply;
 import 'lumi_chat_controller.dart';
 import 'lumi_chat_panel.dart';
 import 'story_reader_screen.dart';
 import '../../theme/app_theme.dart';
+
+// 가운데 안내(크레용 + 글·버튼): 자리가 모자라면 넘치지 않고 스크롤됨
+class _ScrollCenter extends StatelessWidget {
+  final Widget child;
+  const _ScrollCenter({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(padding: const EdgeInsets.symmetric(vertical: 8), child: child),
+    );
+  }
+}
 
 class StoryPreviewScreen extends StatefulWidget {
   final Map<String, Uint8List?> assetPngBytes;
@@ -72,10 +86,60 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
 
   bool get _hasStory => _storyPages.isNotEmpty;
 
+  // ── 아이용 보기: 줄거리를 한 번에 한 화씩 크게 보여 주고, 크레용이 읽어 준다 ──
+  final PageController _pageCtrl = PageController();
+  int _pageIndex = 0;
+  final AudioPlayer _reader = AudioPlayer();
+  final Map<String, Uint8List> _readCache = {}; // 같은 글은 음성을 다시 만들지 않음
+  bool _isReading = false;
+  int _readSession = 0;
+  VoidCallback? _sheetRefresh; // 보호자 메뉴가 열려 있을 때 그 안을 다시 그리기
+
+  Future<void> _readPage(int index) async {
+    if (index < 0 || index >= _storyPages.length) return;
+    final text = (_storyPages[index]['content'] ?? '').toString().trim();
+    final session = ++_readSession;
+    await _reader.stop();
+    if (text.isEmpty || !mounted) return;
+    setState(() => _isReading = true);
+    try {
+      var bytes = _readCache[text];
+      if (bytes == null) {
+        final res = await http.post(
+          Uri.parse('$_baseUrl/api/chat/tts'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'text': text}),
+        );
+        if (res.statusCode == 200) {
+          final String b64 = jsonDecode(utf8.decode(res.bodyBytes))['audio_base64'] ?? '';
+          if (b64.isNotEmpty) bytes = _readCache[text] = base64Decode(b64);
+        }
+      }
+      if (session != _readSession || !mounted) return;
+      if (bytes != null) {
+        await _reader.play(BytesSource(bytes));
+      } else {
+        setState(() => _isReading = false);
+      }
+    } catch (e) {
+      debugPrint('줄거리 읽어 주기 실패: $e');
+      if (mounted && session == _readSession) setState(() => _isReading = false);
+    }
+  }
+
+  void _stopReading() {
+    _readSession++;
+    _reader.stop();
+    if (mounted && _isReading) setState(() => _isReading = false);
+  }
+
   @override
   void initState() {
     super.initState();
     _initSpeech();
+    _reader.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _isReading = false);
+    });
 
     // 💡 더미 데이터("신나는 모험 이야기")가 아닌 유효한 캐시가 있을 때만 재사용
     final bool isDummyFallback = widget.cachedStoryData?['title'] == '신나는 모험 이야기' ||
@@ -91,12 +155,14 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       _lumi.addLumi('전에 만든 줄거리를 가져왔어!\n고치고 싶은 곳이 있으면 말하거나 써 줘');
     } else {
       // 🎯 더미 캐시이거나 처음 진입 시: 화 수를 고른 뒤 줄거리 생성
-      _lumi.addLumi('몇 화짜리 동화로 만들까?\n위에서 고르고 "줄거리 만들기"를 눌러 줘!');
+      _lumi.addLumi('얼마나 긴 동화로 만들까?\n마음에 드는 걸 눌러 줘!');
     }
   }
 
   @override
   void dispose() {
+    _reader.dispose();
+    _pageCtrl.dispose();
     _feedbackController.dispose();
     _editTitleCtrl.dispose();
     _editContentCtrl.dispose();
@@ -152,6 +218,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   // ═══════════════════════════════════════════════════════════════
   Future<void> _fetchRealStory({String? feedback}) async {
     _stopListening();
+    _stopReading();
     setState(() {
       _isGenerating = true;
       _editingIndex = null; // 이야기가 새로 바뀌므로 고치던 내용은 닫음
@@ -203,6 +270,12 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             }
           }
           _isGenerating = false;
+          _pageIndex = 0;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
+          _readPage(0);
         });
 
         _lumi.setThinking(false);
@@ -253,6 +326,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
 
   void _startEdit(int index) {
     _stopListening();
+    _stopReading();
     setState(() {
       _editingIndex = index;
       if (index < 0) {
@@ -421,6 +495,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     final next = _pageCount + delta;
     if (_isGenerating || next < _minPageCount) return;
     setState(() => _pageCount = next);
+    _sheetRefresh?.call();
   }
 
   // 줄거리가 이미 있으면 기존 줄거리를 바탕으로 화 수만 늘리거나 줄임
@@ -433,6 +508,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   }
 
   void _popWithStoryData() {
+    _stopReading();
     if (_storyPages.isNotEmpty) {
       Navigator.pop(context, {
         'title': _storyTitle,
@@ -522,7 +598,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       final pos = _keepInside(
         area,
         size,
-        _lumi.windowPosition ?? Offset(area.width - size.width - 12, area.height - size.height - 86),
+        _lumi.windowPosition ?? Offset(12, area.height - size.height - 86),
       );
       return Stack(
         children: [
@@ -541,7 +617,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     final pos = _keepInside(
       area,
       size,
-      _lumi.buttonPosition ?? Offset(area.width - _lumiButtonSize - 16, area.height - _lumiButtonSize - 86),
+      _lumi.buttonPosition ?? Offset(12, area.height - _lumiButtonSize - 80), // 글을 가리지 않는 왼쪽 아래
     );
     final unread = _lumi.messages.skip(_seenLumiCount).where((m) => m.role == ChatRole.lumi).toList();
     final bool bubbleOnLeft = pos.dx + _lumiButtonSize / 2 > area.width / 2;
@@ -674,11 +750,8 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
                     return Column(
                       children: [
                         _buildTopBar(),
-                        if (!compact) _buildStepBar(),
-                        if (!compact) _buildPageCountPicker(),
                         Expanded(child: _buildStoryArea()),
-                        if (!compact) _buildEngineSwitch(),
-                        if (!compact) _buildBottomButtons(),
+                        if (!compact && _hasStory) _buildBottomButtons(),
                       ],
                     );
                   },
@@ -713,41 +786,11 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
             child: Text('줄거리 만들기', textAlign: TextAlign.center, style: AppTextStyles.headingLarge()),
           ),
           IconButton(
-            tooltip: '이야기 다시 짓기',
-            iconSize: 28,
-            icon: const Icon(Icons.refresh_rounded, color: _purple),
-            onPressed: _isGenerating || !_hasStory ? null : () => _fetchRealStory(),
+            tooltip: '보호자 메뉴',
+            iconSize: 26,
+            icon: const Icon(Icons.tune_rounded, color: _sub),
+            onPressed: _showParentSheet,
           ),
-        ],
-      ),
-    );
-  }
-
-  // ① 몇 화? → ② 줄거리 보기 → ③ 고치기
-  Widget _buildStepBar() {
-    final bool asked = _lumi.messages.any((m) => m.role == ChatRole.child);
-    final int current = !_hasStory ? 0 : (asked ? 2 : 1);
-    const labels = ['몇 화?', '줄거리 보기', '고치기'];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Row(
-        children: [
-          for (int i = 0; i < labels.length; i++) ...[
-            if (i > 0)
-              Expanded(child: Container(height: 3, color: i <= current ? _purple : _cardLine)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: i <= current ? _purple : Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: i <= current ? _purple : _cardLine, width: 2),
-              ),
-              child: Text(
-                '${i + 1}. ${labels[i]}',
-                style: TextStyle(fontSize: 13, color: i <= current ? Colors.white : _sub),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -814,7 +857,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
 
   Widget _buildStoryArea() {
     if (_isGenerating && !_hasStory) {
-      return Center(
+      return _ScrollCenter(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -832,78 +875,237 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
       );
     }
 
-    if (!_hasStory) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildLumiAvatar(84),
-            const SizedBox(height: 18),
-            // 화면 폭의 절반 (좁은 폰에서 글자가 넘치지 않게 최소 260)
-            LayoutBuilder(
-              builder: (context, constraints) => SizedBox(
-                width: math.max(constraints.maxWidth * 0.5, 260),
-                child: _buildBigButton(
-                  label: '$_pageCount화 줄거리 만들기',
-                  icon: Icons.auto_fix_high_rounded,
-                  onTap: () => _fetchRealStory(),
-                ),
-              ),
-            ),
-          ],
+    if (!_hasStory) return _buildLengthPicker();
+    return _buildStoryPager();
+  }
+
+  // 📏 길이 고르기: 숫자 대신 "짧게·보통·길게" 그림 카드 (누르면 바로 줄거리를 지음)
+  Widget _buildLengthPicker() {
+    Widget card(String label, int pages, IconData icon, Color color) {
+      return GestureDetector(
+        onTap: _isGenerating
+            ? null
+            : () {
+                setState(() => _pageCount = pages);
+                _fetchRealStory();
+              },
+        child: Container(
+          width: 150,
+          height: 172,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: _card(radius: 28, color: Color.lerp(color, Colors.white, 0.84)!, edge: Color.lerp(color, Colors.white, 0.45)!),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 66, color: color),
+              const SizedBox(height: 8),
+              Text(label, style: GoogleFonts.poorStory(fontSize: 28, height: 1.1, color: _ink)),
+              Text('$pages장', style: const TextStyle(fontSize: 14, color: _sub)),
+            ],
+          ),
         ),
       );
     }
 
-    return Stack(
-      children: [
-        ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 96), // 아래쪽 루미 버튼에 마지막 카드가 가리지 않게
-          itemCount: _storyPages.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              if (_editingIndex == -1) {
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: _card(),
-                  child: Column(
-                    children: [
-                      _buildEditField(_editTitleCtrl, fontSize: 22, hint: '동화 제목', autofocus: true),
-                      const SizedBox(height: 10),
-                      _buildEditActions(_editTitleCtrl),
-                    ],
+    return _ScrollCenter(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLumiAvatar(84),
+          const SizedBox(height: 12),
+          Text('얼마나 긴 동화로 만들까?', style: AppTextStyles.headingLarge()),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              card('짧게', 3, Icons.auto_stories_rounded, const Color(0xFF5E9E4A)),
+              card('보통', 4, Icons.menu_book_rounded, const Color(0xFFE0A126)),
+              card('길게', 6, Icons.library_books_rounded, const Color(0xFFC9684B)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 📖 한 번에 한 화씩 크게 보여 주기 (옆으로 넘기거나 화살표로 이동, 크레용이 읽어 줌)
+  Widget _buildStoryPager() {
+    final count = _storyPages.length;
+    final index = _pageIndex.clamp(0, count - 1);
+    void go(int delta) => _pageCtrl.animateToPage(
+          index + delta,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight = constraints.maxHeight < 260; // 키보드가 올라온 동안에는 글만
+        return Stack(
+          children: [
+            Column(
+              children: [
+                if (!tight || _editingIndex == -1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                    child: _editingIndex == -1
+                        ? Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: _card(),
+                            child: Column(
+                              children: [
+                                _buildEditField(_editTitleCtrl, fontSize: 22, hint: '동화 제목', autofocus: true),
+                                const SizedBox(height: 10),
+                                _buildEditActions(_editTitleCtrl),
+                              ],
+                            ),
+                          )
+                        : Row(
+                            children: [
+                              const SizedBox(width: 44),
+                              Expanded(
+                                child: Text(
+                                  _storyTitle,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.display(),
+                                ),
+                              ),
+                              _buildPencilButton(-1),
+                            ],
+                          ),
                   ),
-                );
-              }
-              return Row(
-                children: [
-                  const SizedBox(width: 44), // 오른쪽 연필 버튼만큼 비워 제목을 가운데로
-                  Expanded(
-                    child: Text(
-                      _storyTitle,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.display(),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _pageCtrl,
+                    itemCount: count,
+                    onPageChanged: (i) {
+                      setState(() => _pageIndex = i);
+                      if (_editingIndex == null) _readPage(i);
+                    },
+                    itemBuilder: (context, i) => SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(56, 4, 56, 12),
+                      child: _buildPageCard(i),
                     ),
                   ),
-                  _buildPencilButton(-1),
-                ],
-              );
-            }
-            return _buildPageCard(index - 1);
-          },
-        ),
-        // 줄거리를 고치는 동안 기존 줄거리 위에 살짝 덮기
-        if (_isGenerating)
-          Positioned.fill(
-            child: Container(
-              color: _bg.withValues(alpha: 0.7),
-              alignment: Alignment.center,
-              child: const CircularProgressIndicator(strokeWidth: 4, color: _purple),
+                ),
+                if (!tight)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        GestureDetector(
+                          onTap: _isReading ? _stopReading : () => _readPage(index),
+                          child: Container(
+                            height: 52,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            decoration: _card(radius: 26, color: _isReading ? AppColors.secondaryLight : Colors.white),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_isReading ? Icons.stop_rounded : Icons.volume_up_rounded, color: _purple, size: 28),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _isReading ? '그만 듣기' : '들려줘',
+                                  style: AppTextStyles.button(color: _purple).copyWith(fontSize: 21),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        _buildNavButton(Icons.chevron_left_rounded, index > 0 ? () => go(-1) : null),
+                        const SizedBox(width: 10),
+                        for (int i = 0; i < count; i++)
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            width: i == index ? 24 : 11,
+                            height: 11,
+                            decoration: BoxDecoration(
+                              color: i == index ? _purple : _cardLine,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        const SizedBox(width: 10),
+                        _buildNavButton(Icons.chevron_right_rounded, index < count - 1 ? () => go(1) : null),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          ),
-      ],
+            // 줄거리를 고치는 동안 기존 줄거리 위에 살짝 덮기
+            if (_isGenerating)
+              Positioned.fill(
+                child: Container(
+                  color: _bg.withValues(alpha: 0.7),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(strokeWidth: 4, color: _purple),
+                ),
+              ),
+          ],
+        );
+      },
     );
+  }
+
+  Widget _buildNavButton(IconData icon, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.35 : 1,
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: _card(radius: 26),
+          child: Icon(icon, size: 36, color: _purple),
+        ),
+      ),
+    );
+  }
+
+  // 🔧 보호자 메뉴: 아이 화면에서 뺀 설정들 (화 수, 그림 그리는 방법, 다시 짓기)
+  void _showParentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          _sheetRefresh = () => setSheet(() {});
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 18, 8, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('보호자 메뉴', style: AppTextStyles.headingMedium()),
+                  const SizedBox(height: 14),
+                  _buildPageCountPicker(),
+                  _buildEngineSwitch(),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _buildBigButton(
+                      label: '이야기 다시 짓기',
+                      icon: Icons.refresh_rounded,
+                      onTap: _isGenerating || !_hasStory
+                          ? null
+                          : () {
+                              Navigator.pop(sheetCtx);
+                              _fetchRealStory();
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ).whenComplete(() => _sheetRefresh = null);
   }
 
   Widget _buildPageCard(int index) {
@@ -942,7 +1144,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
           ] else
             Text(
               page['content'] ?? '',
-              style: const TextStyle(fontSize: 17, height: 1.6, color: _ink),
+              style: GoogleFonts.poorStory(fontSize: 26, height: 1.5, color: _ink),
             ),
         ],
       ),
@@ -1059,7 +1261,12 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
     Widget option(String label, bool ourModel) {
       final selected = _useOurModel == ourModel;
       return GestureDetector(
-        onTap: _isGenerating ? null : () => setState(() => _useOurModel = ourModel),
+        onTap: _isGenerating
+            ? null
+            : () {
+                setState(() => _useOurModel = ourModel);
+                _sheetRefresh?.call();
+              },
         child: Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1157,6 +1364,7 @@ class _StoryPreviewScreenState extends State<StoryPreviewScreen> {
   // ── 🎨 OpenAI gpt-image-2 일러스트 생성 요청 및 완성 뷰어 이동 ──
   // keepOld: 바뀐 화도 전에 그린 그림을 그대로 쓸지 (null이면 바뀐 화가 있을 때 물어봄)
   Future<void> _createFinalStorybook({bool? keepOld}) async {
+    _stopReading();
     // 그림이 없거나, 그린 뒤로 글이나 그림이 바뀐 화
     final stale = [
       for (int i = 0; i < _storyPages.length; i++)
