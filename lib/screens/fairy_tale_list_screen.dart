@@ -167,7 +167,7 @@ class _FairyTaleListScreenState extends State<FairyTaleListScreen> {
   Widget build(BuildContext context) {
     final canPop = Navigator.of(context).canPop();
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,

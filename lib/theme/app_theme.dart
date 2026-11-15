@@ -4,62 +4,62 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   AppColors._();
 
-  static const Color background = Color(0xFFFFF9EE);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceVariant = Color(0xFFFFF3DC);
+  static const Color background = Color(0xFFFFF3DE); // 크림색 바탕
+  static const Color surface = Color(0xFFFFFDF9); // 흰색에 가까운 카드 (크림색 바탕과 구분)
+  static const Color surfaceVariant = Color(0xFFFFEBCB);
   static const Color inputFill = Color(0xFFFFFDF7);
-  static const Color border = Color(0xFFF1E3C8);
+  static const Color border = Color(0xFFEBCFA6);
 
-  static const Color primary = Color(0xFFF8C03C);
-  static const Color primaryLight = Color(0xFFFFE9A8);
-  static const Color primaryDark = Color(0xFFE0A126);
-  static const Color onPrimary = Color(0xFF4A3728);
-  static const Color primaryText = Color(0xFFB4741C);
+  static const Color primary = Color(0xFFFFCB3D);
+  static const Color primaryLight = Color(0xFFFFEDAA);
+  static const Color primaryDark = Color(0xFFE9A91F);
+  static const Color onPrimary = Color(0xFF6A3516);
+  static const Color primaryText = Color(0xFFB4691C);
 
-  static const Color secondary = Color(0xFF8CC85A);
-  static const Color secondaryLight = Color(0xFFD9EEC5);
-  static const Color secondaryDark = Color(0xFF5E9E4A);
+  static const Color secondary = Color(0xFF8FCB5E);
+  static const Color secondaryLight = Color(0xFFDCEFB8);
+  static const Color secondaryDark = Color(0xFF5A9A3C);
 
-  static const Color accent = Color(0xFFEE8C6E);
-  static const Color accentLight = Color(0xFFFBE9E1);
-  static const Color accentDark = Color(0xFFC9684B);
+  static const Color accent = Color(0xFFF08FA0);
+  static const Color accentLight = Color(0xFFFFE0E6);
+  static const Color accentDark = Color(0xFFC9566B);
 
-  static const Color textPrimary = Color(0xFF4A3728);
-  static const Color textSecondary = Color(0xFF8A7360);
-  static const Color textHint = Color(0xFFBFAE9C);
+  static const Color textPrimary = Color(0xFF4E2C15);
+  static const Color textSecondary = Color(0xFF8A6238);
+  static const Color textHint = Color(0xFFB89F84);
 
   static const Color error = Color(0xFFD9604F);
   static const Color errorLight = Color(0xFFFDECEA);
   static const Color success = secondaryDark;
 
-  static const Color cardShadow = Color(0x148A6A3C);
+  static const Color cardShadow = Color(0x47A9794A);
 }
 
 class AppTextStyles {
   AppTextStyles._();
 
-  static TextStyle display({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle display({Color? color}) => GoogleFonts.jua(
         fontSize: 32,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.textPrimary,
         height: 1.3,
       );
 
-  static TextStyle headingLarge({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle headingLarge({Color? color}) => GoogleFonts.jua(
         fontSize: 26,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.textPrimary,
         height: 1.4,
       );
 
-  static TextStyle headingMedium({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle headingMedium({Color? color}) => GoogleFonts.jua(
         fontSize: 22,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.textPrimary,
         height: 1.4,
       );
 
-  static TextStyle headingSmall({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle headingSmall({Color? color}) => GoogleFonts.jua(
         fontSize: 18,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.textPrimary,
@@ -87,28 +87,28 @@ class AppTextStyles {
         height: 1.5,
       );
 
-  static TextStyle labelLarge({Color? color}) => GoogleFonts.gothicA1(
+  static TextStyle labelLarge({Color? color}) => GoogleFonts.jua(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: color ?? AppColors.textPrimary,
         letterSpacing: 0.3,
       );
 
-  static TextStyle labelMedium({Color? color}) => GoogleFonts.gothicA1(
+  static TextStyle labelMedium({Color? color}) => GoogleFonts.jua(
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: color ?? AppColors.textSecondary,
         letterSpacing: 0.2,
       );
 
-  static TextStyle labelSmall({Color? color}) => GoogleFonts.gothicA1(
+  static TextStyle labelSmall({Color? color}) => GoogleFonts.jua(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         color: color ?? AppColors.textHint,
         letterSpacing: 0.5,
       );
 
-  static TextStyle button({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle button({Color? color}) => GoogleFonts.jua(
         fontSize: 20,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.onPrimary,
@@ -129,7 +129,7 @@ class AppTextStyles {
         height: 1.8,
       );
 
-  static TextStyle storyTitle({Color? color}) => GoogleFonts.poorStory(
+  static TextStyle storyTitle({Color? color}) => GoogleFonts.jua(
         fontSize: 24,
         fontWeight: FontWeight.w400,
         color: color ?? AppColors.textPrimary,
@@ -164,7 +164,7 @@ class AppTheme {
           labelSmall: AppTextStyles.labelSmall(),
         ),
         appBarTheme: AppBarTheme(
-          backgroundColor: AppColors.background,
+          backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
           centerTitle: true,
@@ -313,16 +313,14 @@ class AppTheme {
 class AppDecorations {
   AppDecorations._();
 
+  // 장난감처럼 도톰한 크림색 카드: 밝은 원목색 테두리 + 아래로 깔리는 부드러운 그림자
   static BoxDecoration card({double radius = 20, Color? color}) => BoxDecoration(
         color: color ?? AppColors.surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: AppColors.border, width: 2),
         boxShadow: const [
-          BoxShadow(
-            color: AppColors.border,
-            blurRadius: 0,
-            offset: Offset(0, 5),
-          ),
+          BoxShadow(color: AppColors.border, offset: Offset(0, 4)),
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 8, offset: Offset(0, 8)),
         ],
       );
 
@@ -393,4 +391,76 @@ class CrayongImages {
   static const String lying = '$_base/dragon_lying.png';
   static const String surprised = '$_base/dragon_surprised.png';
   static const String lyingAnim = '$_base/dragon_lying_anim.webp';
+}
+
+/// 크림색 도트 무늬 바탕을 까는 Scaffold. 쓰는 법은 Scaffold 와 같다.
+class ToyScaffold extends StatelessWidget {
+  static const String roomImage = 'assets/toy_shelf/backgrounds/background_room.png';
+
+  final PreferredSizeWidget? appBar;
+  final Widget? body;
+  final Color? backgroundColor; // Scaffold 와 맞추려고 받기만 한다 (배경은 항상 크림색 도트 무늬)
+  final bool? resizeToAvoidBottomInset;
+  final Widget? floatingActionButton;
+  final FloatingActionButtonLocation? floatingActionButtonLocation;
+  final Widget? bottomNavigationBar;
+  final bool extendBody;
+  final bool extendBodyBehindAppBar;
+
+  const ToyScaffold({
+    super.key,
+    this.appBar,
+    this.body,
+    this.backgroundColor,
+    this.resizeToAvoidBottomInset,
+    this.floatingActionButton,
+    this.floatingActionButtonLocation,
+    this.bottomNavigationBar,
+    this.extendBody = false,
+    this.extendBodyBehindAppBar = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 크림색 바탕에 은은한 도트 무늬 (그림책 속지 느낌). 무늬는 화면마다 한 번만 그린다.
+    return ColoredBox(
+      color: AppColors.background,
+      child: CustomPaint(
+        painter: const _DotPaperPainter(),
+        isComplex: true,
+        willChange: false,
+        child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: appBar,
+        body: body,
+        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        floatingActionButton: floatingActionButton,
+        floatingActionButtonLocation: floatingActionButtonLocation,
+        bottomNavigationBar: bottomNavigationBar,
+        extendBody: extendBody,
+        extendBodyBehindAppBar: extendBodyBehindAppBar,
+        ),
+      ),
+    );
+  }
+}
+
+class _DotPaperPainter extends CustomPainter {
+  const _DotPaperPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFF7DDB4);
+    const gap = 44.0;
+    int row = 0;
+    for (double y = gap / 2; y < size.height; y += gap, row++) {
+      // 줄마다 반 칸씩 엇갈리게
+      for (double x = (row.isEven ? gap / 2 : gap); x < size.width; x += gap) {
+        canvas.drawCircle(Offset(x, y), 4, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DotPaperPainter oldDelegate) => false;
 }

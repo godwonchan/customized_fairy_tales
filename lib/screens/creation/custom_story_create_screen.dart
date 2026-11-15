@@ -13,6 +13,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:audioplayers/audioplayers.dart';
 import 'story_preview_screen.dart';
 import 'avatar_maker_screen.dart';
+import '../../widgets/dh_ui.dart';
 import '../../theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -87,7 +88,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   static const Color _deep = AppColors.textPrimary;
 
   final List<StoryCategory> _allCategories = [
-    StoryCategory(id: 'hero', title: '주인공', fairyPrompt: '좋아! 우리 멋진 모험을 이끌어갈 주인공을 그려줘\n사람, 동물, 로봇… 뭐든지 괜찮아!', icon: Icons.person_pin, emoji: '🧒', color: Color(0xFFE0A126), isRequired: true),
+    StoryCategory(id: 'hero', title: '주인공', fairyPrompt: '멋진 모험을 떠날 주인공을 그려 줘!', icon: Icons.person_pin, emoji: '🧒', color: Color(0xFFE0A126), isRequired: true),
     StoryCategory(id: 'companion', title: '단짝 친구', fairyPrompt: '주인공 곁을 지켜줄 든든한 단짝 친구나 귀여운 동물 친구를 그려볼까?', icon: Icons.pets, emoji: '🐶', color: Color(0xFF5E9E4A)),
     StoryCategory(id: 'item', title: '마법 도구', fairyPrompt: '위험한 순간에 힘을 발휘할 신비한 마법 지팡이나 특별한 도구를 그려줘!', icon: Icons.auto_awesome, emoji: '🪄', color: Color(0xFFC9684B)),
     StoryCategory(id: 'place', title: '비밀 장소', fairyPrompt: '모험이 펼쳐질 장소를 그려줘! 우리 집, 마법의 성, 신비한 숲도 좋아.', icon: Icons.castle, emoji: '🏰', color: Color(0xFF4F93C2)),
@@ -122,7 +123,6 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   int _idleNudges = 0;
 
   // ── 갤러리 접기/펼치기 및 캔버스 화면 맞춤 ──
-  bool _isGalleryCollapsed = false; // 갤러리 접힘 상태 플래그
   final TransformationController _transformCtrl = TransformationController();
   bool _isPanMode = false;
   final GlobalKey _workspaceKey = GlobalKey(); // 작업대 영역 크기 측정용 키
@@ -367,7 +367,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       if (widget.initialStoryData != null) {
         _addLumi('이전에 만든 이야기와 그림들을 불러왔어! 🎨\n그림을 수정하거나 자유롭게 더 그려봐');
       } else {
-        _addLumi('안녕? 나는 크레용이야\n우리 같이 동화를 만들어보자~\n주인공을 직접 그릴까, 나를 닮게 만들까?');
+        _addLumi(_greeting);
       }
     });
   }
@@ -1489,6 +1489,12 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   static const Color _green = Color(0xFF6FB043);
   static const Color _cardLine = AppColors.border;
   static const Color _cardEdge = Color(0xFFE6D3AE);
+  static const Color _brown = Color(0xFF5A3A22); // 시안의 진한 고동색 글자
+  static const Color _paperColor = Color(0xFFFFF7E4);
+
+  // 시안의 굵고 둥근 한글 글씨
+  TextStyle _jua(double size, {Color color = _brown}) => GoogleFonts.jua(fontSize: size, color: color, height: 1.2);
+
 
   Color _darken(Color c, [double amount = 0.16]) {
     final hsl = HSLColor.fromColor(c);
@@ -1550,8 +1556,28 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
+  // 예전 크레파스 시안 그림 화면. 홈이 장난감 책장 디자인으로 바뀌어 지금은 쓰지 않는다.
+  static const bool _useMockupScreen = false;
+
   @override
   Widget build(BuildContext context) {
+    // 가로 태블릿: 시안(1586×992) 그림을 깔고 바뀌는 내용만 얹는 화면
+    if (_useMockupScreen && MediaQuery.sizeOf(context).width >= 900) {
+      return Theme(
+        data: _kidsTheme(context),
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _handleSmartBack();
+            });
+          },
+          // 키보드가 올라와도 화면을 줄이지 않는다 (글자 대화창만 키보드 위로 올림)
+          child: Scaffold(resizeToAvoidBottomInset: false, backgroundColor: const Color(0xFFFFF3DC), body: _buildDesignScreen()),
+        ),
+      );
+    }
     return Theme(
       data: _kidsTheme(context),
       child: PopScope(
@@ -1568,7 +1594,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             children: [
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: CustomPaint(painter: _KidsScenePainter(_sceneController)),
+                  // 가로 태블릿: 하늘·들판·크레용이 함께 그려진 배경 한 장 (크레용이 있는 왼쪽 아래를 기준으로 채움)
+                  child: MediaQuery.sizeOf(context).width >= 900
+                      ? const DhMeadow()
+                      : CustomPaint(painter: _KidsScenePainter(_sceneController)),
                 ),
               ),
               SafeArea(
@@ -1581,12 +1610,15 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                           final wide = constraints.maxWidth >= 900;
                           if (wide) {
                             return Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  SizedBox(width: 390, child: _buildChatPanel()),
-                                  const SizedBox(width: 20),
+                                  SizedBox(
+                                    width: (constraints.maxWidth * 0.31).clamp(330.0, 470.0).toDouble(),
+                                    child: _typingMode ? _buildChatPanelClassic() : _buildMeadowLeft(),
+                                  ),
+                                  const SizedBox(width: 14),
                                   Expanded(child: _buildWorkspace()),
                                 ],
                               ),
@@ -1626,56 +1658,53 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
   Widget _buildTopBar() {
     final ready = _heroDrawn;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
-          _Pressable(
-            onTap: _handleSmartBack,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: _chunky(color: Colors.white, edge: const Color(0xFFE6D3AE), shape: BoxShape.circle, depth: 4),
-              child: const Icon(Icons.arrow_back_rounded, size: 26, color: _ink),
+          Semantics(
+            label: '뒤로 가기',
+            button: true,
+            child: _Pressable(
+              onTap: _handleSmartBack,
+              child: Container(
+                width: 60,
+                height: 60,
+                alignment: Alignment.center,
+                decoration: dhFrame('chip_cream', scale: 4),
+                child: const DhIcon('back', size: 34),
+              ),
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '나만의 동화 창작하기',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 26,
-                    color: _ink,
-                    letterSpacing: -0.3,
-                    shadows: [Shadow(color: Colors.white.withValues(alpha: 0.9), offset: const Offset(0, 2))],
+          const SizedBox(width: 10),
+          Flexible(
+            flex: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(26, 12, 30, 14),
+              decoration: dhFrame('title_swash', scale: 2.4),
+              child: FittedBox(fit: BoxFit.scaleDown, child: Text('나만의 동화 만들기', style: _jua(36))),
+            ),
+          ),
+          const Spacer(),
+          const SizedBox(width: 10),
+          Semantics(
+            label: '이야기 짓기',
+            button: true,
+            child: _Pressable(
+              onTap: _proceedToStoryReview,
+              child: Opacity(
+                opacity: ready ? 1 : 0.65,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 26, 18),
+                  decoration: dhFrame('button_cream', scale: 2.4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const DhIcon('book_outline', size: 36),
+                      const SizedBox(width: 8),
+                      Text('이야기 짓기', style: _jua(26)),
+                    ],
                   ),
                 ),
-                const Text('크레용이랑 이야기하며 그림을 그려요',
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, color: Color(0xFF8A7360))),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          _Pressable(
-            onTap: _proceedToStoryReview,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: ready
-                  ? _chunky(color: _yellow, radius: 30, depth: 5)
-                  : _chunky(color: const Color(0xFFF1E3C8), radius: 30, depth: 5),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.menu_book_rounded, size: 22, color: ready ? _ink : const Color(0xFFBFAE9C)),
-                  const SizedBox(width: 8),
-                  Text('이야기 짓기', style: TextStyle(fontSize: 17, color: ready ? _ink : const Color(0xFFBFAE9C))),
-                ],
               ),
             ),
           ),
@@ -1698,10 +1727,16 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
         return Column(
           children: [
             if (showGallery) ...[
-              _buildGallery(forceCollapsed: compactGallery),
+              _buildMeadowGallery(compact: compactGallery),
               const SizedBox(height: 14),
             ],
-            Expanded(child: choosing ? _buildChoiceBoard() : _buildCanvasArea()),
+            Expanded(
+              child: choosing
+                  ? _buildChoiceBoard()
+                  : DhNotebook(
+                      child: Padding(padding: const EdgeInsets.fromLTRB(10, 22, 10, 14), child: _buildCanvasArea()),
+                    ),
+            ),
             if (showDock && !choosing) ...[
               const SizedBox(height: 14),
               _buildDrawingDock(),
@@ -1864,15 +1899,10 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     final enabled = r.onTap != null;
     final accent = r.color ?? _purple;
     final bool wide = r.label.length > 11;
-    final Color bg = !enabled ? const Color(0xFFFFF3DC) : (r.primary ? accent : _tint(accent, 0.86));
-    final Color fg = !enabled ? const Color(0xFFBFAE9C) : (r.primary ? _onColor(accent) : _darken(accent, 0.2));
-    final deco = _chunky(
-      color: bg,
-      edge: !enabled ? const Color(0xFFE6D3AE) : (r.primary ? null : _tint(accent, 0.5)),
-      radius: 24,
-      depth: 5,
-      border: enabled ? accent : _cardLine,
-      borderWidth: 3,
+    final Color fg = enabled ? dhBrown : const Color(0xFFB7A58C);
+    final deco = dhFrame(
+      !enabled ? 'button_disabled' : (r.emoji == 'help' ? 'button_blue' : (r.primary ? 'button_yellow' : 'button_cream')),
+      scale: 2.4,
     );
     // 기기마다 모양이 다른 이모지 대신, 앱 색에 맞춘 스티커 아이콘을 씀 (짝이 없는 이모지만 그대로)
     final iconData = _iconForEmoji(r.emoji);
@@ -1889,20 +1919,20 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       child: wide
           ? Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
               decoration: deco,
               child: Row(
                 children: [
                   emoji,
                   const SizedBox(width: 10),
-                  Expanded(child: Text(r.label, maxLines: 3, style: TextStyle(fontSize: 17, height: 1.35, color: fg))),
+                  Expanded(child: Text(r.label, maxLines: 3, style: dhText(19, color: fg, height: 1.3))),
                 ],
               ),
             )
           : Container(
               width: halfWidth,
-              height: 98,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              height: 104,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               decoration: deco,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1914,7 +1944,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                     maxLines: 2,
                     textAlign: TextAlign.center,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 16, height: 1.2, color: fg),
+                    style: dhText(20, color: fg),
                   ),
                 ],
               ),
@@ -2394,115 +2424,98 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
-  // forceCollapsed: 세로 공간이 좁을 때(키보드가 올라왔을 때) 아이가 접지 않았어도 한 줄로 접어서 보여 줌
-  Widget _buildGallery({bool forceCollapsed = false}) {
+  // 🖼️ 내 그림 모음 (종이 패널): 제목·진행 바·개수·이야기 메모 + 그림 칸들
+  // compact: 세로 공간이 좁을 때(키보드가 올라왔을 때) 윗줄만 보여 줌
+  Widget _buildMeadowGallery({bool compact = false}) {
     final total = _allCategories.length;
     final count = _drawnOrder.length;
-    final collapsed = _isGalleryCollapsed || forceCollapsed;
+    final emptySlots = math.max(0, total - count);
+    final noteCount = _storyNotes.length;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      padding: EdgeInsets.fromLTRB(16, 10, 14, collapsed ? 10 : 14),
-      decoration: _card(radius: 26),
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 12, 18, compact ? 16 : 18),
+      decoration: dhFrame('paper_panel', scale: 2),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── 상단 요약 바 (진행도 + 메모 + 접기/펼치기 토글) ──
           Row(
             children: [
-              const Icon(Icons.photo_library_rounded, size: 22, color: AppColors.primaryText),
-              const SizedBox(width: 6),
-              const Text('내 그림 모음', style: TextStyle(fontSize: 17, color: _ink)),
+              const DhIcon('gallery', size: 42),
               const SizedBox(width: 10),
+              Text('내 그림 모음', style: _jua(25)),
+              const SizedBox(width: 14),
               Expanded(
                 child: Container(
-                  height: 14,
-                  padding: const EdgeInsets.all(2.5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3DC),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  height: 16,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(color: const Color(0xFFEFE3C8), borderRadius: BorderRadius.circular(10)),
                   child: LayoutBuilder(
                     builder: (context, c) => Align(
                       alignment: Alignment.centerLeft,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 500),
                         curve: Curves.easeOutBack,
-                        width: count == 0 ? 0 : (c.maxWidth * (count / total)),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Color(0xFFF8C03C), Color(0xFFE0A126)]),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        width: total == 0 ? 0 : c.maxWidth * (count / total).clamp(0.0, 1.0),
+                        decoration: BoxDecoration(color: const Color(0xFFF2B63C), borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text('$count / $total', style: const TextStyle(fontSize: 14, color: Color(0xFFE08A00), fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
-              _buildStoryNotesChip(),
-              const SizedBox(width: 6),
-
-              // 🔼 [신규 추가] 갤러리 접기/펼치기 토글 버튼
-              if (!forceCollapsed) _Pressable(
-                onTap: () {
-                  setState(() => _isGalleryCollapsed = !_isGalleryCollapsed);
-                  // 갤러리가 접히거나 펼쳐진 직후 캔버스 뷰포트 크기에 맞춰 도화지 자동 재배치
-                  WidgetsBinding.instance.addPostFrameCallback((_) => _fitCanvasToScreen());
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3DC),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isGalleryCollapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
-                        size: 18,
-                        color: _purple,
-                      ),
-                      Text(
-                        _isGalleryCollapsed ? '펼치기' : '접기',
-                        style: const TextStyle(fontSize: 12, color: _purple, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+              const SizedBox(width: 10),
+              Text('$count/$total', style: _jua(22, color: const Color(0xFF8A6A4A))),
+              const SizedBox(width: 12),
+              Semantics(
+                label: '이야기 메모',
+                button: true,
+                child: _Pressable(
+                  onTap: _showStoryNotes,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 16, 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3D9A4),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: const [BoxShadow(color: Color(0xFFDDBB7C), offset: Offset(0, 3))],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const DhIcon('memo', size: 28),
+                        const SizedBox(width: 6),
+                        Text(noteCount > 0 ? '이야기 메모 $noteCount' : '이야기 메모', style: _jua(20)),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-
-          // ── 슬롯 목록 (접혔을 때는 완전히 숨겨져 캔버스 공간 확보) ──
-          if (!collapsed) ...[
-            const SizedBox(height: 12),
+          if (!compact) ...[
+            const SizedBox(height: 10),
             SizedBox(
-              height: 96,
+              height: 94,
               child: Row(
                 children: [
                   Expanded(
-                    child: _drawnOrder.isEmpty
-                        ? Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFFBEA),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFFFE7A3), width: 2),
-                      ),
-                      child: const Text('그린 그림이 여기에 모여요\n눌러서 언제든 다시 고칠 수 있어!',
-                          textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Color(0xFFB88A1E), height: 1.4)),
-                    )
-                        : ListView.separated(
+                    child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.only(bottom: 5),
-                      itemCount: _drawnOrder.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) =>
-                          _AppearIn(key: ValueKey('slot_${_drawnOrder[index]}'), child: _buildSlotItem(_drawnOrder[index])),
+                      itemCount: count + emptySlots,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        if (index < count) {
+                          return _AppearIn(
+                            key: ValueKey('slot_${_drawnOrder[index]}'),
+                            child: _buildSlotItem(_drawnOrder[index]),
+                          );
+                        }
+                        // 아직 안 그린 칸: 빈 종이
+                        return Container(
+                          width: 84,
+                          decoration: dhFrame('gallery_slot', scale: 3),
+                        );
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -2512,33 +2525,6 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             ),
           ],
         ],
-      ),
-    );
-  }
-
-
-  Widget _buildStoryNotesChip() {
-    final count = _storyNotes.length;
-    return _Pressable(
-      onTap: _showStoryNotes,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-        decoration: _chunky(
-          color: count > 0 ? const Color(0xFFFFF4D6) : const Color(0xFFFFF3DC),
-          edge: count > 0 ? const Color(0xFFF2C94C) : _cardEdge,
-          radius: 16,
-          depth: 3,
-          border: count > 0 ? const Color(0xFFF2C94C) : _cardLine,
-          borderWidth: 2,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sticky_note_2_rounded, size: 18, color: count > 0 ? const Color(0xFFB07A00) : _sub),
-            const SizedBox(width: 4),
-            Text('이야기 메모 $count', style: TextStyle(fontSize: 13, color: count > 0 ? const Color(0xFFB07A00) : _sub)),
-          ],
-        ),
       ),
     );
   }
@@ -2804,13 +2790,12 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
-  Widget _buildCanvasArea() {
+  Widget _buildCanvasArea({bool design = false}) {
     final cat = currentCat;
     final isAi = cat != null && (_slotAiDelegated[cat.id] ?? false);
 
     return Container(
-      key: _workspaceKey, // 👈 [추가 1] 화면 크기 자동 측정을 위해 키 연결
-      decoration: _card(),
+      key: _workspaceKey, // 화면 크기 자동 측정용
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: cat == null
@@ -2828,7 +2813,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
               children: [
                 // ── 🌐 작업대(Desk) & 100% 꽉 찬 인터랙티브 도화지 ──
                 Container(
-                  color: const Color(0xFFFFF3DC), // 줌아웃 시 드러나는 작업대 배경색
+                  color: Colors.transparent, // 줌아웃 시 노트 종이가 그대로 보임
                   child: InteractiveViewer(
                     transformationController: _transformCtrl,
                     constrained: false, // 👈 [추가 2] 화면 크기로 강제 압축되는 현상 차단!
@@ -2840,8 +2825,8 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                     child: Container(
                       width: _virtualCanvasSize.width,  // 👈 [수정 3] 진짜 2000 적용!
                       height: _virtualCanvasSize.height, // 👈 [수정 3] 진짜 1600 적용!
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+                      decoration: design ? null : BoxDecoration(
+                        color: const Color(0xFFFFFDF6), // 크림색 도화지 (저장되는 그림은 투명 배경이라 영향 없음)
                         borderRadius: BorderRadius.circular(24),
                         // 🎯 [경계선] 도화지 가장자리에 둘러진 뚜렷한 보라색 외곽선 & 입체 그림자
                         border: Border.all(color: const Color(0xFF5E9E4A), width: 3.5),
@@ -2859,7 +2844,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                         child: Stack(
                           children: [
                             // 1. 도화지 배경 도트 그리드 (화면 끝까지 꽉 참!)
-                            const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+                            if (!design) const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
 
                             // 2. 🖼️ 로컬에 영구 보존된 원본 밑그림 레이어 (정중앙 512x512)
                             if (_currentId != null && _restoredBasePng[_currentId] != null)
@@ -2934,7 +2919,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                       ),
                     ),
                   )
-                else if (!hasCanvasDrawing)
+                else if (!hasCanvasDrawing && !design)
                   IgnorePointer(
                     child: _FitCenter(
                       child: AnimatedBuilder(
@@ -2961,7 +2946,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                   ),
 
                 // ── 상단 카테고리 태그 ──
-                Positioned(
+                if (!design) Positioned(
                   top: 14,
                   left: 14,
                   child: Container(
@@ -2987,7 +2972,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                 ),
 
                 // ── 우상단 툴바 (실행취소 / 다시실행 / 🎯 화면 맞춤 / 전체삭제) ──
-                Positioned(
+                if (!design) Positioned(
                   top: 12,
                   right: 12,
                   child: Container(
@@ -3007,7 +2992,7 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
                 ),
 
                 // ── 다 그렸어! 완료 버튼 ──
-                if (_stage == CreationStage.drawing)
+                if (_stage == CreationStage.drawing && !design)
                   Positioned(
                     bottom: 18,
                     right: 18,
@@ -3085,6 +3070,618 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     );
   }
 
+  // ══ 시안 그림 기반 화면 (가로 태블릿) ══
+  // 주인공을 고르기 전에는 '주인공 만들기' 시안을, 그 뒤에는 '그리기' 시안을 그대로 깔고
+  // 그 위에 누르는 자리와 바뀌는 내용(말풍선 글, 그림 모음, 도화지, 도구, 답 버튼)만 얹는다. 좌표는 시안 픽셀 기준.
+  static const String _greeting = '안녕! 나는 크레용이야.\n우리 같이 주인공을\n만들까?';
+
+  Widget _buildDesignScreen() {
+    final heroStage = _stage == CreationStage.choosing && !_heroDrawn;
+    final replies = _isLumiThinking ? <QuickReply>[] : _kidReplies(_buildQuickReplies());
+    final lastLumi = _messages.lastWhere(
+      (m) => m.role == ChatRole.lumi,
+      orElse: () => ChatMessage(ChatRole.lumi, ''),
+    );
+    final text = _isLumiThinking ? '음… 생각하고 있어!' : lastLumi.text;
+    final mq = MediaQuery.of(context);
+    final double keyboard = mq.viewInsets.bottom * 992 / math.max(1, mq.size.height);
+    return Stack(
+      children: [
+        const Positioned.fill(child: DhMeadow()),
+        Positioned.fill(
+          child: DhDesignCanvas(
+            children: [
+              ...(heroStage ? _heroDesign(text) : _drawDesign(text, replies)),
+              // 보호자용 글자 대화창 (키보드 버튼으로 켬): 왼쪽 칸을 덮고, 키보드가 올라오면 그 위까지만
+              if (_typingMode)
+                Positioned.fromRect(
+                  rect: Rect.fromLTRB(12, 105, 470, math.max(420, 982 - keyboard)),
+                  child: _buildChatPanelClassic(),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 말풍선 글: 줄바꿈을 풀어 칸 너비에 맞게 흐르게 하고(번호 보기는 줄 유지), 글자 수에 따라 큰 글씨부터 쓴다.
+  // 그래도 칸보다 길면 통째로 작아진다.
+  Widget _designBubbleText(String text, double width, double size) {
+    final flat = text.contains('번, ') ? text : text.replaceAll('\n', ' ');
+    final n = flat.runes.length;
+    final double fit = n <= 20 ? 42 : (n <= 30 ? 34 : (n <= 48 ? 28 : 23));
+    return Padding(
+      padding: const EdgeInsets.all(4),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: SizedBox(width: width, child: Text(flat, style: dhText(math.min(size, fit), height: 1.26))),
+      ),
+    );
+  }
+
+  // 듣는 중일 때만: '눌러서 말해 줘' 자리에 들은 말을 보여 주고 마이크를 주황색으로
+  List<Widget> _designListening({required Rect label, required Color paper, Rect? mic}) {
+    if (!_isListening) return const [];
+    final heard = _chatInputCtrl.text.trim();
+    return [
+      DhPatch(
+        label,
+        paper,
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text(heard.isEmpty ? '듣고 있어!' : heard, style: dhText(34))),
+      ),
+      if (mic != null)
+        Positioned.fromRect(
+          rect: mic,
+          child: IgnorePointer(
+            child: Container(
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFEE8C6E)),
+              child: DhIcon('microphone', size: mic.width * 0.6),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  // ① 주인공 만들기 시안: 직접 그리기 / 나를 닮게 만들기
+  List<Widget> _heroDesign(String text) {
+    return [
+      Positioned.fill(child: Image.asset(dhHome('hero_full'), fit: BoxFit.fill)),
+      // 오른쪽 위 버튼 글자 (시안에는 '이야기 작가'로 그려져 있어 실제 기능 이름으로 덮음)
+      DhPatch(
+        const Rect.fromLTRB(1362, 46, 1550, 106),
+        const Color(0xFFFBEFD8),
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text('이야기 짓기', style: dhText(38))),
+      ),
+      // 말풍선: 첫 인사는 그림 그대로, 다른 말일 때만 덮어 씀
+      if (text != _greeting)
+        DhPatch(
+          const Rect.fromLTRB(70, 190, 388, 354),
+          const Color(0xFFFDF4E2),
+          radius: 30,
+          alignment: Alignment.centerLeft,
+          child: _designBubbleText(text, 306, 42),
+        ),
+      ..._designListening(label: const Rect.fromLTRB(138, 843, 384, 910), paper: const Color(0xFFFCF2D8)),
+      DhHit(const Rect.fromLTRB(18, 18, 124, 120), '뒤로 가기', _handleSmartBack, radius: 50),
+      DhHit(const Rect.fromLTRB(1262, 28, 1572, 128), '이야기 짓기', _proceedToStoryReview, radius: 48),
+      DhHit(const Rect.fromLTRB(383, 266, 474, 352), '크레용 말 다시 듣기', _isLumiThinking || text.isEmpty ? null : () => _speakLumi(text), radius: 44),
+      DhHit(const Rect.fromLTRB(1293, 168, 1552, 240), '이야기 메모', _showStoryNotes, radius: 34),
+      DhHit(const Rect.fromLTRB(528, 528, 1004, 934), '직접 그리기', _isLumiThinking ? null : () => _selectCategory('hero'), radius: 44),
+      DhHit(const Rect.fromLTRB(1016, 528, 1538, 934), '나를 닮게 만들기', _isLumiThinking ? null : _openAvatarMaker, radius: 44),
+      DhHit(const Rect.fromLTRB(18, 806, 398, 950), _isListening ? '듣는 중, 누르면 멈춤' : '눌러서 말하기', _isLumiThinking ? null : _toggleVoiceInput, radius: 66),
+      DhHit(const Rect.fromLTRB(402, 840, 498, 940), '키보드로 쓰기', _toggleTypingMode, radius: 30),
+    ];
+  }
+
+  // 스케치북 안 (시안 좌표): 시안에 그려진 꼬리표·안내·도구·완료 버튼을 그대로 쓰고, 지금 상태와 다른 곳만 종이색으로 덮는다.
+  // 덮개는 그리는 층 아래에 깔리므로 아이의 선을 가리지 않고, 저장되는 그림(투명 배경의 선)에도 들어가지 않는다.
+  List<Widget> _sketchbookDesign() {
+    const paper = Color(0xFFFCF4E8);
+    final cat = currentCat;
+    final isHero = cat?.id == 'hero';
+    final isAi = cat != null && (_slotAiDelegated[cat.id] ?? false);
+    final hasDrawing = _paths.isNotEmpty || (cat != null && (_restoredBasePng[cat.id] != null || _slotPngBytes[cat.id] != null));
+    final label = cat == null ? '' : (_customSubject[cat.id] ?? cat.title);
+    final canFinish = _stage == CreationStage.drawing && hasDrawing;
+
+    return [
+      // 꼬리표: 주인공이 아니면 시안의 '주인공 · 필수'를 덮고 지금 그리는 것의 이름을 씀
+      if (cat == null || !isHero)
+        DhPatch(
+          const Rect.fromLTRB(474, 350, 720, 424),
+          paper,
+          alignment: Alignment.centerLeft,
+          child: cat == null
+              ? null
+              : Container(
+                  margin: const EdgeInsets.only(left: 8),
+                  padding: const EdgeInsets.fromLTRB(24, 8, 26, 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7B928),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: const [BoxShadow(color: Color(0xFFE19A12), offset: Offset(0, 4))],
+                  ),
+                  child: Text(_labelOf(cat.id), maxLines: 1, overflow: TextOverflow.ellipsis, style: dhText(31)),
+                ),
+        ),
+      // 가운데 안내: 그리기 시작했으면 지우고, 주인공이 아니면 그 이름으로 바꿔 씀
+      if (hasDrawing || isAi || cat == null)
+        const DhPatch(Rect.fromLTRB(740, 462, 1262, 736), paper, radius: 30)
+      else if (!isHero)
+        DhPatch(
+          const Rect.fromLTRB(740, 462, 1262, 736),
+          paper,
+          radius: 30,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const DhIcon('pencil_hint', size: 120),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('$label을(를) 자유롭게 그려봐!', style: dhText(44, color: const Color(0xFFD8BE98))),
+              ),
+            ],
+          ),
+        ),
+      // 완료 버튼: 그리는 단계가 아니면 지우고, 누를 수 있으면 초록 버튼으로 (시안 그림은 아직 못 누르는 모습)
+      if (_stage != CreationStage.drawing) const DhPatch(Rect.fromLTRB(1296, 754, 1558, 848), paper, radius: 40),
+
+      // 실제 그리는 층 (투명): 스케치북 종이 위에 선만 그려짐
+      Positioned.fromRect(rect: const Rect.fromLTRB(474, 344, 1562, 856), child: _buildCanvasArea(design: true)),
+
+      if (canFinish)
+        Positioned.fromRect(
+          rect: const Rect.fromLTRB(1304, 762, 1550, 838),
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF5FA13F),
+                borderRadius: BorderRadius.circular(38),
+                boxShadow: const [BoxShadow(color: Color(0xFF3F7A2A), offset: Offset(0, 5))],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const DhIcon('check_white', size: 34),
+                  const SizedBox(width: 10),
+                  Text('다 그렸어!', style: dhText(34, color: Colors.white)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      if (_stage == CreationStage.drawing)
+        DhHit(const Rect.fromLTRB(1300, 758, 1554, 844), '다 그렸어', canFinish ? _startNaming : null, radius: 40),
+
+      // 도구 (시안에 그려진 되돌리기·다시 하기·화면 맞춤·지우기 아이콘 위의 누르는 자리)
+      DhHit(const Rect.fromLTRB(1262, 360, 1332, 418), '되돌리기', _paths.isEmpty ? null : () => setState(() => _redoStack.add(_paths.removeLast())), radius: 28),
+      DhHit(const Rect.fromLTRB(1334, 360, 1398, 418), '다시 하기', _redoStack.isEmpty ? null : () => setState(() => _paths.add(_redoStack.removeLast())), radius: 28),
+      DhHit(const Rect.fromLTRB(1400, 360, 1464, 418), '화면에 맞추기', _fitCanvasToScreen, radius: 28),
+      DhHit(const Rect.fromLTRB(1476, 360, 1542, 418), '모두 지우기', _paths.isEmpty ? null : _clearCanvas, radius: 28),
+    ];
+  }
+
+  // ② 그리기 시안: 말풍선·그림 모음·스케치북·도구 줄
+  List<Widget> _drawDesign(String text, List<QuickReply> replies) {
+    final total = _allCategories.length;
+    final count = _drawnOrder.length;
+    final emptySlots = math.max(0, total - count);
+    final choosing = _stage == CreationStage.choosing;
+    // 시안에 그려진 답 버튼 세 개와 지금 답이 같으면 그림을 그대로 쓰고, 다르면 지우고 실제 버튼을 그림
+    final baked = replies.length == 3 &&
+        replies[0].label == '다 그렸어!' &&
+        replies[1].label == '도와줘' &&
+        replies[2].label == '다른 거 그릴래';
+    final canAdd = _remainingCategories.isNotEmpty && !choosing;
+
+    return [
+      Positioned.fill(child: Image.asset(dhHome(baked ? 'drawing_full' : 'drawing_clean'), fit: BoxFit.fill)),
+
+      // 오른쪽 위 버튼 글자 (시안의 오타 '이야기 짓가'를 덮음)
+      DhPatch(
+        const Rect.fromLTRB(1336, 28, 1532, 86),
+        const Color(0xFFF8ECD4),
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text('이야기 짓기', style: dhText(38))),
+      ),
+      // 말풍선 글
+      DhPatch(
+        const Rect.fromLTRB(48, 138, 366, 272),
+        const Color(0xFFFDF2DA),
+        radius: 30,
+        alignment: Alignment.centerLeft,
+        child: _designBubbleText(text, 306, 42),
+      ),
+
+      // 내 그림 모음: 진행 막대, 개수, 그림 칸
+      Positioned.fromRect(
+        rect: const Rect.fromLTRB(782, 131, 1232, 156),
+        child: Container(
+          decoration: BoxDecoration(color: const Color(0xFFEADFC6), borderRadius: BorderRadius.circular(13)),
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: total == 0 ? 0 : (count / total).clamp(0.0, 1.0),
+            child: Container(
+              decoration: BoxDecoration(color: const Color(0xFFF5B83A), borderRadius: BorderRadius.circular(13)),
+            ),
+          ),
+        ),
+      ),
+      DhPatch(
+        const Rect.fromLTRB(1238, 120, 1314, 162),
+        const Color(0xFFFDF0D8),
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text('$count/$total', style: dhText(32))),
+      ),
+      DhPatch(
+        const Rect.fromLTRB(506, 166, 1442, 292),
+        const Color(0xFFFDEFD4),
+        radius: 22,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+          itemCount: count + emptySlots,
+          separatorBuilder: (_, _) => const SizedBox(width: 12),
+          itemBuilder: (context, index) {
+            if (index < count) {
+              return _AppearIn(key: ValueKey('slot_${_drawnOrder[index]}'), child: _buildSlotItem(_drawnOrder[index]));
+            }
+            return Container(width: 104, decoration: dhFrame('gallery_slot', scale: 4));
+          },
+        ),
+      ),
+
+      // 스케치북 안: 고르는 중이면 그림 카드 판, 아니면 실제 그리기 도화지 (종이 테두리·고리는 바깥 그림이라 저장 그림에 안 섞임)
+      if (choosing)
+        Positioned.fromRect(rect: const Rect.fromLTRB(462, 322, 1570, 864), child: _buildChoiceBoard())
+      else
+        ..._sketchbookDesign(),
+
+      // 그리기 도구 줄 (펜·지우개·이동, 굵기, 색): 그림 속 도구를 덮고 실제 상태를 그림
+      DhPatch(
+        const Rect.fromLTRB(478, 892, 1554, 966),
+        const Color(0xFFFDF6E4),
+        radius: 36,
+        child: choosing ? null : _buildDrawingDock(bare: true),
+      ),
+
+      // 답 버튼
+      if (baked) ...[
+        if (replies[0].onTap == null) DhPatch(const Rect.fromLTRB(22, 598, 234, 722), const Color(0x99FFFFFF), radius: 44),
+        DhHit(const Rect.fromLTRB(22, 598, 234, 722), '다 그렸어', replies[0].onTap, radius: 44),
+        DhHit(const Rect.fromLTRB(246, 594, 446, 722), '도와줘', replies[1].onTap, radius: 44),
+        DhHit(const Rect.fromLTRB(78, 733, 394, 857), '다른 거 그릴래', replies[2].onTap, radius: 44),
+      ] else ...[
+        if (replies.isNotEmpty)
+          Positioned.fromRect(
+            rect: const Rect.fromLTRB(14, 600, 454, 864),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SingleChildScrollView(
+                controller: _stageScrollCtrl,
+                child: _AppearIn(
+                  key: ValueKey('tiles_${_messages.length}_${_stage.name}_${_currentId ?? ''}_$_showHints'),
+                  delay: const Duration(milliseconds: 180),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [for (final r in replies) _buildAnswerTile(r, 214)],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+
+      ..._designListening(
+        label: const Rect.fromLTRB(124, 894, 340, 950),
+        paper: const Color(0xFFFCF1D6),
+        mic: Rect.fromCircle(center: const Offset(72, 922), radius: 47),
+      ),
+
+      // 누르는 자리들
+      DhHit(const Rect.fromLTRB(25, 16, 114, 100), '뒤로 가기', _handleSmartBack, radius: 44),
+      DhHit(const Rect.fromLTRB(1236, 12, 1556, 100), '이야기 짓기', _proceedToStoryReview, radius: 44),
+      DhHit(const Rect.fromLTRB(372, 166, 460, 256), '크레용 말 다시 듣기', _isLumiThinking || text.isEmpty ? null : () => _speakLumi(text), radius: 44),
+      DhHit(const Rect.fromLTRB(1320, 112, 1554, 170), '이야기 메모', _showStoryNotes, radius: 30),
+      DhHit(const Rect.fromLTRB(1445, 176, 1554, 286), '새로 그리기', canAdd ? () => _goChoosing(childSays: '다른 거 그릴래!') : null, radius: 26),
+      DhHit(const Rect.fromLTRB(15, 868, 358, 980), _isListening ? '듣는 중, 누르면 멈춤' : '눌러서 말하기', _isLumiThinking ? null : _toggleVoiceInput, radius: 56),
+      DhHit(const Rect.fromLTRB(363, 876, 454, 970), '키보드로 쓰기', _toggleTypingMode, radius: 28),
+    ];
+  }
+
+  // ── 🌼 시안 화면 (가로 태블릿): 들판 배경 위의 말풍선·답 버튼·말하기 줄 ──
+  // 크레용은 배경 그림 속 왼쪽 아래에 있으므로 따로 그리지 않는다
+  Widget _buildMeadowLeft() {
+    final replies = _isLumiThinking ? <QuickReply>[] : _kidReplies(_buildQuickReplies());
+    final lastLumi = _messages.lastWhere(
+      (m) => m.role == ChatRole.lumi,
+      orElse: () => ChatMessage(ChatRole.lumi, ''),
+    );
+    final text = _isLumiThinking ? '음… 생각하고 있어!' : lastLumi.text;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final double halfWidth = (c.maxWidth - 10) / 2;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: math.max(120, c.maxHeight * 0.4)),
+              child: _AppearIn(
+                key: ValueKey('say_${_messages.length}_$_isLumiThinking'),
+                child: _buildMeadowBubble(text),
+              ),
+            ),
+            // 크레용이: 말풍선과 답 버튼 사이에서 전체가 보이게 (장식이라 터치를 가로채지 않음)
+            Expanded(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _floatingAnim,
+                  builder: (context, child) => Transform.translate(offset: Offset(0, _floatingAnim.value), child: child),
+                  child: Image.asset(CrayongImages.main, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            if (replies.isNotEmpty)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: math.max(110, c.maxHeight * 0.36)),
+                child: SingleChildScrollView(
+                  controller: _stageScrollCtrl,
+                  padding: const EdgeInsets.only(top: 4, bottom: 6),
+                  child: _AppearIn(
+                    key: ValueKey('tiles_${_messages.length}_${_stage.name}_${_currentId ?? ''}_$_showHints'),
+                    delay: const Duration(milliseconds: 180),
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.center,
+                      children: [for (final r in replies) _buildAnswerTile(r, halfWidth)],
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+            _buildMeadowVoiceRow(),
+          ],
+        );
+      },
+    );
+  }
+
+  // 종이 말풍선 (왼쪽 아래 꼬리가 달린 프레임), 오른쪽에 다시 듣기 버튼
+  // (글자는 characters 로 나눈다. split 으로 나누면 이모지가 반으로 쪼개져 글 전체가 깨진다)
+  // 한글이 단어 중간에서 끊기지 않게: 낱말 안 글자 사이에 '줄바꿈 금지' 문자를 넣어 띄어쓰기에서만 줄이 바뀌게 한다
+  String _wrapByWord(String text) {
+    final flat = text.contains('번, ') ? text : text.replaceAll('\n', ' ');
+    return flat.split(' ').map((w) => w.characters.join('\u2060')).join(' ');
+  }
+
+  Widget _buildMeadowBubble(String text) {
+    return Container(
+      decoration: dhFrame('speech', scale: 1.7),
+      padding: const EdgeInsets.fromLTRB(26, 18, 14, 22),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(child: Text(_wrapByWord(text), style: dhText(27, height: 1.36))),
+          ),
+          const SizedBox(width: 8),
+          DhPressable(
+            label: '크레용 말 다시 듣기',
+            onTap: _isLumiThinking || text.isEmpty ? null : () => _speakLumi(text),
+            child: Container(
+              width: 62,
+              height: 62,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFCDEBB5),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF5E9E4A), width: 2.5),
+              ),
+              child: const DhIcon('speaker', size: 38),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 초록 마이크가 든 말하기 알약 버튼 + 따로 떨어진 키보드 버튼
+  Widget _buildMeadowVoiceRow() {
+    final heard = _chatInputCtrl.text.trim();
+    final label = _isListening ? (heard.isEmpty ? '듣고 있어!' : heard) : '눌러서 말해 줘';
+    return Row(
+      children: [
+        Expanded(
+          child: DhPressable(
+            label: _isListening ? '듣는 중, 누르면 멈춤' : '눌러서 말하기',
+            onTap: _isLumiThinking ? null : _toggleVoiceInput,
+            child: Container(
+              height: 92,
+              padding: const EdgeInsets.fromLTRB(10, 6, 14, 14),
+              decoration: dhFrame('chip_cream', scale: 1.8),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 70,
+                    height: 70,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _isListening ? const Color(0xFFEE8C6E) : const Color(0xFF3FA535),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _isListening ? const Color(0xFFC9684B) : const Color(0xFF2C7E25),
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const DhIcon('microphone', size: 42),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: dhText(25)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        DhPressable(
+          label: '키보드로 쓰기',
+          onTap: _toggleTypingMode,
+          child: Container(
+            width: 84,
+            height: 84,
+            padding: const EdgeInsets.only(bottom: 8),
+            alignment: Alignment.center,
+            decoration: dhFrame('button_cream', scale: 2.6),
+            child: const DhIcon('keyboard', size: 44),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 스프링 노트 종이: 종이 프레임 + 위쪽 갈색 제본 고리 (lib/widgets/dh_ui.dart)
+  Widget _notePaper({required Widget child}) => DhNotebook(child: child);
+
+  // 📒 주인공 만들기 노트: "직접 그리기" / "나를 닮게 만들기" 그림 카드 두 장
+  Widget _buildHeroNote() {
+    return _notePaper(
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final showTitle = c.maxHeight >= 260;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(22, showTitle ? 34 : 26, 22, 20),
+            child: Column(
+              children: [
+                if (showTitle) ...[
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CustomPaint(size: Size(40, 36), painter: _SparklePainter(mirrored: false)),
+                        const SizedBox(width: 16),
+                        Text('주인공을 만들어 보자!', style: _jua(42)),
+                        const SizedBox(width: 16),
+                        const CustomPaint(size: Size(40, 36), painter: _SparklePainter(mirrored: true)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _heroImageCard(
+                          image: 'assets/story_home/draw_cat.png',
+                          tile: 'assets/story_home/yellow_wax.png',
+                          base: const Color(0xFFFFC83A),
+                          edge: const Color(0xFFE2A21C),
+                          label: '직접 그리기',
+                          onTap: () => _selectCategory('hero'),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: _heroImageCard(
+                          image: 'assets/story_home/mirror_girl.png',
+                          tile: 'assets/story_home/blue_wax.png',
+                          base: const Color(0xFF6FC3F0),
+                          edge: const Color(0xFF3F9CD0),
+                          label: '나를 닮게 만들기',
+                          imageAlignment: const Alignment(0.75, 0), // 거울 속 얼굴이 잘리지 않게 오른쪽 기준
+                          onTap: _openAvatarMaker,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // 파스텔색 카드: 위에 삽화, 아래에 크림색 글자 라벨 (카드 전체가 버튼)
+  Widget _heroImageCard({
+    required String image,
+    required String tile,
+    required Color base,
+    required Color edge,
+    required String label,
+    required VoidCallback onTap,
+    Alignment imageAlignment = Alignment.center,
+  }) {
+    return Semantics(
+      label: label,
+      button: true,
+      child: _Pressable(
+        onTap: _isLumiThinking ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Color.lerp(base, Colors.white, 0.5),
+            borderRadius: BorderRadius.circular(36),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.75), width: 4),
+            boxShadow: [BoxShadow(color: Color.lerp(edge, Colors.white, 0.3)!, offset: const Offset(0, 6))],
+          ),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final showImage = c.maxHeight >= 150;
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (showImage) ...[
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        // 칸이 삽화와 비슷한 비율이면 꽉 채우고, 훨씬 세로로 길면 좌우가 잘리지 않게 너비에 맞춤
+                        child: LayoutBuilder(
+                          builder: (context, box) {
+                            final tall = box.maxWidth / box.maxHeight < 1.35;
+                            return SizedBox.expand(
+                              child: Image.asset(
+                                image,
+                                fit: tall ? BoxFit.fitWidth : BoxFit.cover,
+                                alignment: tall ? Alignment.center : imageAlignment,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Container(
+                    height: 64,
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: _paperColor, borderRadius: BorderRadius.circular(32)),
+                    child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: _jua(34))),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── 🃏 고르기 판: 한 번에 큰 그림 카드 3개까지만 보여 줌 ──
   Widget _buildChoiceBoard() {
     final remaining = _remainingCategories;
@@ -3099,19 +3696,19 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
       shown = [for (int i = 0; i < 3; i++) remaining[(start + i) % remaining.length]];
     }
     final current = _currentId;
+    if (heroFirst) return _buildHeroNote();
 
-    return Container(
-      decoration: _card(),
+    return _notePaper(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
-            const Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
             _FitCenter(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(heroFirst ? '주인공을 만들어 보자!' : '무엇을 그릴까?', style: const TextStyle(fontSize: 28, color: _ink)),
+                  const SizedBox(height: 14),
+                  Text(heroFirst ? '주인공을 만들어 보자!' : '무엇을 그릴까?', style: _jua(36)),
                   const SizedBox(height: 18),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -3320,11 +3917,11 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
     _restartIdleTimer(resetCount: false);
   }
 
-  Widget _buildDrawingDock() {
+  Widget _buildDrawingDock({bool bare = false}) {
     return Container(
-      height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: _card(radius: 36),
+      height: bare ? null : 82,
+      padding: bare ? const EdgeInsets.symmetric(horizontal: 10) : const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      decoration: bare ? null : dhFrame('tool_tray', scale: 2.2),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -3382,9 +3979,9 @@ class _CustomStoryCreateScreenState extends State<CustomStoryCreateScreen>
             : const BoxDecoration(color: Colors.transparent),
         child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 16)),
+            DhIcon(label == '펜' ? 'pen' : (label == '지우개' ? 'eraser' : 'pan'), size: 26),
             const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 15, color: active ? Colors.white : _sub)),
+            Text(label, style: dhText(18, color: active ? Colors.white : _brown)),
           ],
         ),
       ),
@@ -3882,4 +4479,30 @@ class TrianglePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// 제목 양옆의 노란 반짝임 선 세 개
+class _SparklePainter extends CustomPainter {
+  final bool mirrored;
+  const _SparklePainter({required this.mirrored});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFF2B21E)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+    if (mirrored) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+    final w = size.width, h = size.height;
+    canvas.drawLine(Offset(w * 0.55, h * 0.1), Offset(w * 0.78, h * 0.42), paint);
+    canvas.drawLine(Offset(w * 0.2, h * 0.5), Offset(w * 0.62, h * 0.66), paint);
+    canvas.drawLine(Offset(w * 0.3, h * 0.95), Offset(w * 0.7, h * 0.9), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklePainter oldDelegate) => oldDelegate.mirrored != mirrored;
 }

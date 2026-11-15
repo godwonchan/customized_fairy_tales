@@ -424,7 +424,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading || _errorMessage != null || _taleBook == null || _pageController == null) {
-      return Scaffold(
+      return ToyScaffold(
         backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
@@ -478,7 +478,7 @@ class _TaleReadingScreenState extends State<TaleReadingScreen>
 
     final isLastPage = _currentPageIndex == _taleBook!.totalPages - 1;
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: LayoutBuilder(

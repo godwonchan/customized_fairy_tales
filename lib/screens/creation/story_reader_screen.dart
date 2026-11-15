@@ -222,7 +222,7 @@ class _StoryReaderScreenState extends State<StoryReaderScreen>
     final bool hasPrev = _currentPageIndex > 0;
     final bool hasNext = _currentPageIndex < widget.pages.length - 1;
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(

@@ -43,3 +43,15 @@ flutter:
     - assets/images/
     - assets/images/dragon/
     - assets/book_004_Simcheong/
+    - assets/story_home/
+    - assets/donghwarang/avatar/layers/
+    - assets/donghwarang/controls/
+    - assets/donghwarang/frames/
+    - assets/donghwarang/home/
+    - assets/donghwarang/icons/
+    - assets/donghwarang/shared/
+    - assets/donghwarang/swatches/
+    - assets/toy_shelf/backgrounds/
+    - assets/toy_shelf/icons/
+    - assets/toy_shelf/illustrations/
+    - assets/toy_shelf/ui/

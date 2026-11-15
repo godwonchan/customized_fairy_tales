@@ -70,7 +70,7 @@ class _FairyTaleDetailScreenState extends State<FairyTaleDetailScreen>
   Widget build(BuildContext context) {
     final tale = widget.tale;
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [

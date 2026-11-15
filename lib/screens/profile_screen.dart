@@ -149,7 +149,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(

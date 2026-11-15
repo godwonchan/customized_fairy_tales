@@ -492,7 +492,7 @@ class _SceneEditScreenState extends State<SceneEditScreen> {
     // 키보드가 올라와도 화면 전체를 줄이지 않고(줄이면 그림판 쪽이 넘침), 글을 쓰는 오른쪽 패널만 키보드 위로 올린다
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
       body: SafeArea(

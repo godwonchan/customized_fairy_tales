@@ -233,7 +233,7 @@ class _AIResultScreenState extends State<AIResultScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: FadeTransition(

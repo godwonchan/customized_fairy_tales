@@ -1,7 +1,9 @@
 // lib/screens/creation/avatar_maker_screen.dart
 // 나를 닮은 주인공 만들기: 글을 몰라도 그림 버튼만 눌러 주인공을 꾸민다.
+// - 캐릭터는 투명 PNG 조각(512×512, assets/donghwarang/avatar/layers)을 정해진 순서로 겹쳐 그린다.
+//   뒷머리 → 몸(피부) → 옷 → 얼굴 → 눈 → 앞머리 → 장식. 모든 조각이 같은 정사각형 좌표를 쓴다.
 // - 고를 때마다 캐릭터가 바로 바뀐다 (그림 생성 AI를 쓰지 않아 기다림·비용이 없음)
-// - "사진으로 닮게"를 누르면 사진에서 머리 모양·머리색·안경 같은 특징만 읽어 처음 모습을 맞춰 준다
+// - "사진으로 닮게"를 누르면 사진에서 머리 모양·머리색·피부 톤·안경만 읽어 처음 모습을 맞춰 준다
 //   (사진은 서버에 저장하지 않고, 그림으로 바꾸지도 않는다)
 // - 완성하면 PNG 로 만들어 창작 화면의 주인공 그림 자리에 넣는다
 import 'dart:convert';
@@ -11,12 +13,13 @@ import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../config/app_config.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/crayong_widgets.dart';
+import '../../widgets/dh_ui.dart';
 
 /// 꾸미기 결과 (창작 화면으로 돌려주는 값)
 class AvatarResult {
@@ -27,41 +30,43 @@ class AvatarResult {
 
 /// 캐릭터 생김새 (모든 값은 보기 번호)
 class AvatarConfig {
-  final int skin;
-  final int hairStyle;
-  final int hairColor;
-  final int eyes;
-  final int outfit;
-  final int accessory;
+  final int skin; // 0 peach, 1 warm, 2 tan, 3 deep
+  final int faceShape; // 0 동그란 얼굴, 1 갸름한 얼굴
+  final int hairStyle; // 0 짧은 머리, 1 단발, 2 긴 머리, 3 양갈래, 4 올림머리, 5 곱슬
+  final int hairColor; // 0 검정, 1 갈색(조각 원래 색), 2 밝은 갈색, 3 노랑, 4 빨강, 5 분홍
+  final int eyes; // 0 동그란 눈, 1 웃는 눈, 2 반짝 눈
+  final int outfit; // 0 파랑, 1 분홍, 2 민트, 3 노랑
+  final int accessory; // 0 없음, 1 안경, 2 리본, 3 왕관
 
   const AvatarConfig({
     this.skin = 0,
-    this.hairStyle = 0,
-    this.hairColor = 0,
+    this.faceShape = 0,
+    this.hairStyle = 1,
+    this.hairColor = 1,
     this.eyes = 0,
     this.outfit = 0,
     this.accessory = 0,
   });
 
-  static const List<Color> skins = [Color(0xFFFFE3CC), Color(0xFFF8CFA6), Color(0xFFE2AA7A), Color(0xFFA8704A)];
+  static const List<String> skinNames = ['peach', 'warm', 'tan', 'deep'];
+  static const List<String> faceNames = ['round', 'oval'];
+  static const List<String> eyeNames = ['round', 'smile', 'sparkle'];
+  static const List<String> outfitNames = ['blue', 'pink', 'mint', 'yellow'];
   static const List<Color> hairColors = [
-    Color(0xFF2B2320),
-    Color(0xFF6B4226),
+    Color(0xFF3A2E2A),
+    Color(0xFF72432A),
     Color(0xFFB9783F),
     Color(0xFFF2C94C),
     Color(0xFFD9573F),
     Color(0xFFFF8FC8),
   ];
-  static const List<Color> outfitColors = [Color(0xFF4D96FF), Color(0xFFFF6B6B), Color(0xFF6BCB77), Color(0xFFFFC93C)];
+  static const int hairStyleCount = 6;
+  static const int accessoryCount = 4;
 
-  static const int hairStyleCount = 6; // 짧은 머리, 단발, 긴 머리, 양갈래, 똥머리, 곱슬
-  static const int eyesCount = 3; // 동그란 눈, 웃는 눈, 반짝 눈
-  static const int outfitCount = 8; // 티셔츠 4색 + 원피스 4색
-  static const int accessoryCount = 5; // 없음, 안경, 리본, 왕관, 모자
-
-  AvatarConfig copyWith({int? skin, int? hairStyle, int? hairColor, int? eyes, int? outfit, int? accessory}) {
+  AvatarConfig copyWith({int? skin, int? faceShape, int? hairStyle, int? hairColor, int? eyes, int? outfit, int? accessory}) {
     return AvatarConfig(
       skin: skin ?? this.skin,
+      faceShape: faceShape ?? this.faceShape,
       hairStyle: hairStyle ?? this.hairStyle,
       hairColor: hairColor ?? this.hairColor,
       eyes: eyes ?? this.eyes,
@@ -70,218 +75,120 @@ class AvatarConfig {
     );
   }
 
+  bool sameAs(AvatarConfig o) =>
+      skin == o.skin &&
+      faceShape == o.faceShape &&
+      hairStyle == o.hairStyle &&
+      hairColor == o.hairColor &&
+      eyes == o.eyes &&
+      outfit == o.outfit &&
+      accessory == o.accessory;
+
+  /// 겹쳐 그릴 조각 이름 (그리는 순서대로). 머리 조각은 hairColor 로 물들인다.
+  List<String> get layerNames => [
+        'hair_${hairStyle % hairStyleCount + 1}_back',
+        'skin_${skinNames[skin % 4]}',
+        'outfit_${outfitNames[outfit % 4]}',
+        'face_${faceNames[faceShape % 2]}_${skinNames[skin % 4]}',
+        'eyes_${eyeNames[eyes % 3]}',
+        'hair_${hairStyle % hairStyleCount + 1}_front',
+        if (accessory == 2) 'accessory_bow',
+        if (accessory == 3) 'accessory_crown',
+      ];
+
   String describe() {
     const hairColorNames = ['검은', '갈색', '밝은 갈색', '노란', '빨간', '분홍'];
     const hairStyleNames = ['짧은 머리', '단발머리', '긴 머리', '양갈래 머리', '위로 묶은 머리', '곱슬머리'];
-    const outfitColorNames = ['파란', '빨간', '초록', '노란'];
-    const accessoryNames = ['', '동그란 안경', '빨간 리본', '금빛 왕관', '털모자'];
+    const outfitColorNames = ['파란', '분홍', '민트색', '노란'];
+    const accessoryNames = ['', '동그란 안경', '분홍 리본', '금빛 왕관'];
     final parts = <String>[
-      '${hairColorNames[hairColor]} ${hairStyleNames[hairStyle]}',
-      '${outfitColorNames[outfit % 4]} ${outfit < 4 ? '티셔츠' : '원피스'}',
-      if (accessory > 0) accessoryNames[accessory],
+      '${hairColorNames[hairColor % 6]} ${hairStyleNames[hairStyle % 6]}',
+      '${outfitColorNames[outfit % 4]} 옷',
+      if (accessory > 0 && accessory < accessoryNames.length) accessoryNames[accessory],
     ];
     return '아이를 닮게 꾸민 주인공 (${parts.join(', ')})';
   }
 }
 
-const Color _outline = Color(0xFF4A3728);
+/// 조각 PNG 를 한 번만 읽어 두는 보관소 (미리보기·보기 카드·PNG 내보내기가 함께 씀)
+class AvatarLayers {
+  static final Map<String, ui.Image> _images = {};
+  static Future<void>? _loading;
+  static bool get ready => _images.length >= _all.length;
 
-/// 512x512 기준으로 캐릭터를 그린다 (화면 미리보기·보기 버튼·PNG 내보내기가 모두 이 함수를 씀)
+  static final List<String> _all = [
+    for (int h = 1; h <= 6; h++) ...['hair_${h}_back', 'hair_${h}_front'],
+    for (final t in AvatarConfig.skinNames) ...['skin_$t', 'face_round_$t', 'face_oval_$t'],
+    for (final o in AvatarConfig.outfitNames) 'outfit_$o',
+    for (final e in AvatarConfig.eyeNames) 'eyes_$e',
+    'accessory_bow',
+    'accessory_crown',
+  ];
+
+  static Future<void> load() => _loading ??= _loadAll();
+
+  static Future<void> _loadAll() async {
+    await Future.wait(_all.map((name) async {
+      final data = await rootBundle.load(dhLayer(name));
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      _images[name] = (await codec.getNextFrame()).image;
+    }));
+  }
+
+  static ui.Image? of(String name) => _images[name];
+}
+
+// 머리 조각(갈색)을 다른 머리색으로 물들이는 필터: 밝기는 살리고 색만 바꿔 테두리 선이 남는다
+ColorFilter? _hairTint(int hairColor) {
+  if (hairColor % 6 == 1) return null; // 조각 원래 색
+  final c = AvatarConfig.hairColors[hairColor % 6];
+  const k = 1 / 0.307; // 조각의 가운데 밝기가 고른 색이 되도록
+  final r = c.r * k, g = c.g * k, b = c.b * k;
+  return ColorFilter.matrix(<double>[
+    0.299 * r, 0.587 * r, 0.114 * r, 0, 0,
+    0.299 * g, 0.587 * g, 0.114 * g, 0, 0,
+    0.299 * b, 0.587 * b, 0.114 * b, 0, 0,
+    0, 0, 0, 1, 0,
+  ]);
+}
+
+/// 캐릭터를 그린다 (화면 미리보기·보기 카드·PNG 내보내기가 모두 이 함수를 씀). 조각을 다 읽기 전에는 아무것도 그리지 않는다.
 void paintAvatar(Canvas canvas, Size size, AvatarConfig c) {
-  final double s = math.min(size.width, size.height) / 512;
-  canvas.save();
-  canvas.translate((size.width - 512 * s) / 2, (size.height - 512 * s) / 2);
-  canvas.scale(s);
+  if (!AvatarLayers.ready) return;
+  final double side = math.min(size.width, size.height);
+  final dst = Rect.fromLTWH((size.width - side) / 2, (size.height - side) / 2, side, side);
+  const src = Rect.fromLTWH(0, 0, 512, 512);
+  final tint = _hairTint(c.hairColor);
 
-  final skin = AvatarConfig.skins[c.skin % AvatarConfig.skins.length];
-  final hair = AvatarConfig.hairColors[c.hairColor % AvatarConfig.hairColors.length];
-  final cloth = AvatarConfig.outfitColors[c.outfit % 4];
-  final bool dress = c.outfit >= 4;
-
-  Paint fill(Color color) => Paint()..color = color;
-  Paint line([double w = 6]) => Paint()
-    ..color = _outline
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = w
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round;
-  Paint limb(Color color, double w) => Paint()
-    ..color = color
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = w
-    ..strokeCap = StrokeCap.round;
-
-  const head = Offset(256, 200);
-  const double r = 105;
-
-  // 1. 뒷머리 (얼굴 뒤에 깔리는 부분)
-  void backShape(Path p) {
-    canvas.drawPath(p, fill(hair));
-    canvas.drawPath(p, line(5));
+  for (final name in c.layerNames) {
+    final image = AvatarLayers.of(name);
+    if (image == null) continue;
+    final paint = Paint()..filterQuality = FilterQuality.medium;
+    if (tint != null && name.startsWith('hair_')) paint.colorFilter = tint;
+    canvas.drawImageRect(image, src, dst, paint);
   }
 
-  if (c.hairStyle == 1) {
-    backShape(Path()..addRRect(RRect.fromLTRBR(138, 190, 374, 330, const Radius.circular(46))));
-  } else if (c.hairStyle == 2) {
-    backShape(Path()..addRRect(RRect.fromLTRBR(134, 190, 378, 420, const Radius.circular(50))));
-  } else if (c.hairStyle == 3) {
-    for (final x in [122.0, 390.0]) {
-      backShape(Path()..addOval(Rect.fromCenter(center: Offset(x, 262), width: 78, height: 104)));
-      canvas.drawCircle(Offset(x < 256 ? 146 : 366, 214), 12, fill(const Color(0xFFFF6B6B)));
-    }
-  } else if (c.hairStyle == 4) {
-    backShape(Path()..addOval(Rect.fromCircle(center: const Offset(256, 82), radius: 44)));
-  } else if (c.hairStyle == 5) {
-    for (int i = 0; i <= 8; i++) {
-      final a = math.pi + (math.pi * i / 8);
-      final p = head + Offset(math.cos(a) * (r + 6), math.sin(a) * (r + 6));
-      backShape(Path()..addOval(Rect.fromCircle(center: p, radius: 36)));
-    }
-    for (final x in [150.0, 362.0]) {
-      backShape(Path()..addOval(Rect.fromCircle(center: Offset(x, 236), radius: 34)));
-    }
-  }
-
-  // 2. 다리와 신발
-  for (final x in [228.0, 284.0]) {
-    canvas.drawLine(Offset(x, 396), Offset(x, 458), limb(_outline, 34));
-    canvas.drawLine(Offset(x, 396), Offset(x, 458), limb(skin, 24));
-    final shoe = Rect.fromCenter(center: Offset(x < 256 ? x - 8 : x + 8, 470), width: 56, height: 28);
-    canvas.drawOval(shoe, fill(const Color(0xFF8D6E63)));
-    canvas.drawOval(shoe, line(5));
-  }
-
-  // 3. 팔
-  for (final pair in [
-    [const Offset(196, 326), const Offset(142, 384)],
-    [const Offset(316, 326), const Offset(370, 384)],
-  ]) {
-    canvas.drawLine(pair[0], pair[1], limb(_outline, 34));
-    canvas.drawLine(pair[0], pair[1], limb(skin, 24));
-  }
-
-  // 4. 옷
-  final Path body;
-  if (dress) {
-    body = Path()
-      ..moveTo(204, 292)
-      ..lineTo(308, 292)
-      ..lineTo(352, 414)
-      ..lineTo(160, 414)
-      ..close();
-  } else {
-    body = Path()..addRRect(RRect.fromLTRBR(188, 292, 324, 408, const Radius.circular(30)));
-  }
-  canvas.drawPath(body, fill(cloth));
-  canvas.drawPath(body, line());
-  if (!dress) {
-    // 티셔츠 가운데 작은 별
-    canvas.drawCircle(const Offset(256, 352), 13, fill(Colors.white.withValues(alpha: 0.85)));
-  }
-
-  // 5. 귀와 얼굴
-  for (final x in [156.0, 356.0]) {
-    canvas.drawCircle(Offset(x, 212), 20, fill(skin));
-    canvas.drawCircle(Offset(x, 212), 20, line(5));
-  }
-  canvas.drawCircle(head, r, fill(skin));
-  canvas.drawCircle(head, r, line());
-
-  // 6. 앞머리 (머리 전체에서 얼굴이 보이는 구멍을 뺀 모양)
-  final hairCap = Path.combine(
-    PathOperation.difference,
-    Path()..addOval(Rect.fromCircle(center: head, radius: r + 10)),
-    Path()..addOval(Rect.fromCenter(center: const Offset(256, 238), width: r * 1.7, height: r * 1.86)),
-  );
-  final double sideLimit = c.hairStyle == 0 || c.hairStyle == 4 ? 196 : 226; // 옆머리가 내려오는 높이
-  final front = Path.combine(
-    PathOperation.intersect,
-    hairCap,
-    Path()..addRect(Rect.fromLTRB(0, 0, 512, sideLimit)),
-  );
-  canvas.drawPath(front, fill(hair));
-  canvas.drawPath(front, line(5));
-
-  // 7. 눈·볼·입
-  const eyeL = Offset(218, 216);
-  const eyeR = Offset(294, 216);
-  if (c.eyes == 1) {
-    for (final e in [eyeL, eyeR]) {
-      canvas.drawArc(Rect.fromCenter(center: e + const Offset(0, 6), width: 34, height: 28), math.pi, math.pi, false, line(6));
-    }
-  } else {
-    final double er = c.eyes == 2 ? 16 : 11;
-    for (final e in [eyeL, eyeR]) {
-      canvas.drawCircle(e, er, fill(_outline));
-      canvas.drawCircle(e + Offset(-er * 0.3, -er * 0.35), er * 0.36, fill(Colors.white));
-      if (c.eyes == 2) canvas.drawCircle(e + Offset(er * 0.35, er * 0.3), er * 0.2, fill(Colors.white));
-    }
-  }
-  for (final x in [194.0, 318.0]) {
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(x, 250), width: 36, height: 22),
-      fill(const Color(0xFFFF8A80).withValues(alpha: 0.55)),
-    );
-  }
-  canvas.drawArc(Rect.fromCenter(center: const Offset(256, 248), width: 58, height: 44), math.pi * 0.15, math.pi * 0.7, false, line(6));
-
-  // 8. 꾸미기 소품
+  // 안경은 조각 그림이 없어 눈 위치(조각 좌표 215·297, 196)에 맞춰 직접 그린다
   if (c.accessory == 1) {
-    for (final e in [eyeL, eyeR]) {
-      canvas.drawCircle(e, 28, fill(Colors.white.withValues(alpha: 0.25)));
-      canvas.drawCircle(e, 28, line(6));
+    final double s = side / 512;
+    Offset at(double x, double y) => dst.topLeft + Offset(x * s, y * s);
+    final rim = Paint()
+      ..color = const Color(0xFF5A3A22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6 * s
+      ..strokeCap = StrokeCap.round;
+    final glass = Paint()..color = Colors.white.withValues(alpha: 0.28);
+    for (final x in [215.5, 297.5]) {
+      canvas.drawCircle(at(x, 196), 30 * s, glass);
+      canvas.drawCircle(at(x, 196), 30 * s, rim);
     }
-    canvas.drawLine(eyeL + const Offset(28, 0), eyeR - const Offset(28, 0), line(6));
-  } else if (c.accessory == 2) {
-    const center = Offset(338, 118);
-    final bow = Path()
-      ..moveTo(center.dx, center.dy)
-      ..lineTo(center.dx - 46, center.dy - 30)
-      ..lineTo(center.dx - 46, center.dy + 30)
-      ..close()
-      ..moveTo(center.dx, center.dy)
-      ..lineTo(center.dx + 46, center.dy - 30)
-      ..lineTo(center.dx + 46, center.dy + 30)
-      ..close();
-    canvas.drawPath(bow, fill(const Color(0xFFFF5C7A)));
-    canvas.drawPath(bow, line(5));
-    canvas.drawCircle(center, 13, fill(const Color(0xFFFF5C7A)));
-    canvas.drawCircle(center, 13, line(5));
-  } else if (c.accessory == 3) {
-    final crown = Path()
-      ..moveTo(196, 108)
-      ..lineTo(206, 44)
-      ..lineTo(236, 82)
-      ..lineTo(256, 34)
-      ..lineTo(276, 82)
-      ..lineTo(306, 44)
-      ..lineTo(316, 108)
-      ..close();
-    canvas.drawPath(crown, fill(const Color(0xFFFFD93D)));
-    canvas.drawPath(crown, line(5));
-    for (final x in [226.0, 256.0, 286.0]) {
-      canvas.drawCircle(Offset(x, 94), 6, fill(const Color(0xFFFF6B6B)));
-    }
-  } else if (c.accessory == 4) {
-    final cap = Path.combine(
-      PathOperation.intersect,
-      Path()..addOval(Rect.fromCircle(center: const Offset(256, 150), radius: r + 14)),
-      Path()..addRect(const Rect.fromLTRB(0, 0, 512, 132)),
-    );
-    canvas.drawPath(cap, fill(const Color(0xFF4F93C2)));
-    canvas.drawPath(cap, line(5));
-    final band = RRect.fromLTRBR(134, 116, 378, 148, const Radius.circular(16));
-    canvas.drawRRect(band, fill(const Color(0xFFE8F1F8)));
-    canvas.drawRRect(band, line(5));
-    canvas.drawCircle(const Offset(256, 24), 20, fill(const Color(0xFFE8F1F8)));
-    canvas.drawCircle(const Offset(256, 24), 20, line(5));
+    canvas.drawLine(at(245.5, 194), at(267.5, 194), rim);
   }
-
-  canvas.restore();
 }
 
 /// 캐릭터를 투명 배경 PNG 로 만든다 (창작 화면의 다른 그림과 같은 512x512)
 Future<Uint8List> renderAvatarPng(AvatarConfig config, {int size = 512}) async {
+  await AvatarLayers.load();
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble()));
   paintAvatar(canvas, Size(size.toDouble(), size.toDouble()), config);
@@ -292,28 +199,24 @@ Future<Uint8List> renderAvatarPng(AvatarConfig config, {int size = 512}) async {
 
 class AvatarPainter extends CustomPainter {
   final AvatarConfig config;
-  const AvatarPainter(this.config);
+  final bool ready;
+  AvatarPainter(this.config) : ready = AvatarLayers.ready;
 
   @override
   void paint(Canvas canvas, Size size) => paintAvatar(canvas, size, config);
 
   @override
-  bool shouldRepaint(AvatarPainter oldDelegate) =>
-      oldDelegate.config.skin != config.skin ||
-      oldDelegate.config.hairStyle != config.hairStyle ||
-      oldDelegate.config.hairColor != config.hairColor ||
-      oldDelegate.config.eyes != config.eyes ||
-      oldDelegate.config.outfit != config.outfit ||
-      oldDelegate.config.accessory != config.accessory;
+  bool shouldRepaint(AvatarPainter oldDelegate) => oldDelegate.ready != ready || !oldDelegate.config.sameAs(config);
 }
 
 // 꾸밀 수 있는 부분 하나 (탭 하나)
 class _Part {
-  final String emoji;
+  final String icon; // assets/donghwarang/icons
+  final String label; // 접근성 이름
   final int count;
   final int Function(AvatarConfig) get;
   final AvatarConfig Function(AvatarConfig, int) set;
-  const _Part(this.emoji, this.count, this.get, this.set);
+  const _Part(this.icon, this.label, this.count, this.get, this.set);
 }
 
 class AvatarMakerScreen extends StatefulWidget {
@@ -326,7 +229,7 @@ class AvatarMakerScreen extends StatefulWidget {
 class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTickerProviderStateMixin {
   static String get _baseUrl => AppConfig.serverUrl;
 
-  AvatarConfig _config = const AvatarConfig(hairStyle: 1, hairColor: 1);
+  AvatarConfig _config = const AvatarConfig(); // 시안의 기본 모습: 갈색 단발, 파란 옷
   int _tab = 1; // 처음에는 머리 모양부터
   bool _analyzing = false;
   bool _finishing = false;
@@ -337,17 +240,20 @@ class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTicker
       AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat(reverse: true);
 
   static final List<_Part> _parts = [
-    _Part('🙂', AvatarConfig.skins.length, (c) => c.skin, (c, i) => c.copyWith(skin: i)),
-    _Part('💇', AvatarConfig.hairStyleCount, (c) => c.hairStyle, (c, i) => c.copyWith(hairStyle: i)),
-    _Part('🎨', AvatarConfig.hairColors.length, (c) => c.hairColor, (c, i) => c.copyWith(hairColor: i)),
-    _Part('👀', AvatarConfig.eyesCount, (c) => c.eyes, (c, i) => c.copyWith(eyes: i)),
-    _Part('👕', AvatarConfig.outfitCount, (c) => c.outfit, (c, i) => c.copyWith(outfit: i)),
-    _Part('👑', AvatarConfig.accessoryCount, (c) => c.accessory, (c, i) => c.copyWith(accessory: i)),
+    _Part('face', '얼굴', 4, (c) => c.skin, (c, i) => c.copyWith(skin: i)),
+    _Part('hair', '머리 모양', AvatarConfig.hairStyleCount, (c) => c.hairStyle, (c, i) => c.copyWith(hairStyle: i)),
+    _Part('palette', '머리 색', AvatarConfig.hairColors.length, (c) => c.hairColor, (c, i) => c.copyWith(hairColor: i)),
+    _Part('eyes', '눈', 3, (c) => c.eyes, (c, i) => c.copyWith(eyes: i)),
+    _Part('clothes', '옷', 4, (c) => c.outfit, (c, i) => c.copyWith(outfit: i)),
+    _Part('crown', '꾸미기', AvatarConfig.accessoryCount, (c) => c.accessory, (c, i) => c.copyWith(accessory: i)),
   ];
 
   @override
   void initState() {
     super.initState();
+    AvatarLayers.load().then((_) {
+      if (mounted) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _speak('나를 닮은 주인공을 만들어 보자! 마음에 드는 그림을 눌러 봐.');
     });
@@ -398,11 +304,11 @@ class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTicker
   void _randomize() {
     setState(() {
       _config = AvatarConfig(
-        skin: _random.nextInt(AvatarConfig.skins.length),
+        skin: _random.nextInt(4),
         hairStyle: _random.nextInt(AvatarConfig.hairStyleCount),
         hairColor: _random.nextInt(AvatarConfig.hairColors.length),
-        eyes: _random.nextInt(AvatarConfig.eyesCount),
-        outfit: _random.nextInt(AvatarConfig.outfitCount),
+        eyes: _random.nextInt(3),
+        outfit: _random.nextInt(4),
         accessory: _random.nextInt(AvatarConfig.accessoryCount),
       );
     });
@@ -442,10 +348,7 @@ class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTicker
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('찍을래요'),
-                      ),
+                      child: ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('찍을래요')),
                     ),
                   ],
                 ),
@@ -485,7 +388,7 @@ class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTicker
 
       setState(() {
         _config = _config.copyWith(
-          skin: pick('skin', AvatarConfig.skins.length, _config.skin),
+          skin: pick('skin', 4, _config.skin),
           hairStyle: pick('hair_style', AvatarConfig.hairStyleCount, _config.hairStyle),
           hairColor: pick('hair_color', AvatarConfig.hairColors.length, _config.hairColor),
           accessory: f['glasses'] == true ? 1 : (_config.accessory == 1 ? 0 : _config.accessory),
@@ -517,257 +420,180 @@ class _AvatarMakerScreenState extends State<AvatarMakerScreen> with SingleTicker
     }
   }
 
+  // ── 시안 크기(1586×992) 좌표에 홈 톤의 판·버튼·카드를 직접 그린다 ──
+  static const List<double> _tabX = [727, 872, 1017, 1160, 1302, 1447]; // 탭 동그라미 가운데 (y 는 205)
+  static const List<List<double>> _cardCols = [[641, 850], [866, 1077], [1092, 1298], [1316, 1527]];
+  static const List<List<double>> _cardRows = [[335, 556], [578, 802]];
+
+  Rect _cardRect(int i) {
+    final c = _cardCols[i % 4], r = _cardRows[(i ~/ 4) % 2];
+    return Rect.fromLTRB(c[0] - 4, r[0] - 4, c[1] + 4, r[1] + 6);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final part = _parts[_tab];
+    final selected = part.get(_config);
+    return ToyScaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth >= 700) {
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(flex: 4, child: _buildPreview()),
-                          const SizedBox(width: 18),
-                          Expanded(flex: 6, child: _buildOptions(columns: 4)),
-                        ],
-                      ),
-                    );
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
-                    child: Column(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: DhMeadow()),
+          Positioned.fill(
+            child: DhDesignCanvas(
+              children: [
+                // 바탕 판: 왼쪽 미리보기 판, 오른쪽 고르기 판
+                Positioned.fromRect(rect: const Rect.fromLTRB(40, 150, 596, 932), child: Container(decoration: dhFrame('paper_panel'))),
+                Positioned.fromRect(rect: const Rect.fromLTRB(612, 122, 1560, 842), child: Container(decoration: dhFrame('paper_panel'))),
+
+                // 위쪽: 뒤로, 제목, 다 됐어
+                Positioned.fromRect(
+                  rect: const Rect.fromLTRB(30, 34, 118, 122),
+                  child: Container(
+                    decoration: dhFrame('button_cream').copyWith(borderRadius: BorderRadius.circular(44)),
+                    child: const Icon(Icons.arrow_back_rounded, size: 50, color: dhBrown),
+                  ),
+                ),
+                Positioned(left: 146, top: 44, child: Text('나를 닮은 주인공', style: dhText(58))),
+                Positioned.fromRect(
+                  rect: const Rect.fromLTRB(1282, 36, 1562, 118),
+                  child: Container(
+                    decoration: dhFrame('button_yellow').copyWith(borderRadius: BorderRadius.circular(42)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        SizedBox(height: constraints.maxHeight * 0.42, child: _buildPreview()),
-                        const SizedBox(height: 12),
-                        Expanded(child: _buildOptions(columns: 3)),
+                        const Icon(Icons.check_rounded, size: 46, color: Color(0xFF7A3B1E)),
+                        const SizedBox(width: 8),
+                        Text('다 됐어!', style: dhText(42, color: const Color(0xFF7A3B1E))),
                       ],
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+                  ),
+                ),
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-      child: Row(
-        children: [
-          RoundIconButton(icon: Icons.arrow_back_rounded, onTap: () => Navigator.pop(context)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('나를 닮은 주인공 만들기', maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.headingLarge()),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: _finishing ? null : _finish,
-            child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 26),
-              decoration: AppDecorations.sticker(
-                color: AppColors.secondaryDark,
-                shadowColor: const Color(0xFF457A36),
-                radius: 28,
-                depth: 5,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.check_rounded, color: Colors.white, size: 28),
-                  const SizedBox(width: 8),
-                  Text('다 됐어!', style: AppTextStyles.button(color: Colors.white).copyWith(fontSize: 24)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreview() {
-    return Container(
-      decoration: AppDecorations.card(radius: 30, color: AppColors.primaryLight),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: AnimatedBuilder(
-                    animation: _floatController,
-                    builder: (context, child) => Transform.translate(
-                      offset: Offset(0, -6 * Curves.easeInOut.transform(_floatController.value)),
-                      child: child,
+                // 아래쪽: 사진으로 닮게, 아무거나
+                Positioned.fromRect(
+                  rect: const Rect.fromLTRB(62, 812, 344, 896),
+                  child: Container(
+                    decoration: dhFrame('button_blue').copyWith(borderRadius: BorderRadius.circular(42)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.photo_camera_rounded, size: 40, color: dhBrown),
+                        const SizedBox(width: 8),
+                        Text('사진으로 닮게', style: dhText(30)),
+                      ],
                     ),
-                    child: CustomPaint(painter: AvatarPainter(_config)),
+                  ),
+                ),
+                Positioned.fromRect(
+                  rect: const Rect.fromLTRB(360, 812, 574, 896),
+                  child: Container(
+                    decoration: dhFrame('button_cream').copyWith(borderRadius: BorderRadius.circular(42)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.casino_rounded, size: 40, color: dhBrown),
+                        const SizedBox(width: 8),
+                        Text('아무거나', style: dhText(30)),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 왼쪽 큰 미리보기: 연노랑 판 위에 지금 조합을 그림
+                Positioned.fromRect(
+                  rect: const Rect.fromLTRB(92, 205, 548, 792),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE9A0),
+                      borderRadius: BorderRadius.circular(40),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.8), width: 4),
+                    ),
+                  ),
+                ),
+                Positioned.fromRect(
+                  rect: const Rect.fromLTWH(0, 160, 640, 640),
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _floatController,
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(0, -6 * Curves.easeInOut.transform(_floatController.value)),
+                        child: child,
+                      ),
+                      child: CustomPaint(painter: AvatarPainter(_config)),
+                    ),
                   ),
                 ),
                 if (_analyzing)
-                  Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.asset(CrayongImages.drawing, height: 100),
-                          const SizedBox(height: 12),
-                          const SizedBox(
-                            width: 140,
-                            child: LinearProgressIndicator(minHeight: 6, borderRadius: BorderRadius.all(Radius.circular(3))),
-                          ),
-                          const SizedBox(height: 10),
-                          Text('닮은 점을 찾고 있어…', style: AppTextStyles.headingSmall()),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _previewButton(icon: Icons.photo_camera_rounded, label: '사진으로 닮게', onTap: _matchFromPhoto),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: _previewButton(icon: Icons.casino_rounded, label: '아무거나', onTap: _randomize),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _previewButton({required IconData icon, required String label, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: _analyzing ? null : onTap,
-      child: Container(
-        height: 58,
-        alignment: Alignment.center,
-        decoration: AppDecorations.sticker(color: AppColors.surface, shadowColor: AppColors.border, radius: 20, depth: 4),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 26, color: AppColors.primaryText),
-                const SizedBox(width: 6),
-                Text(label, style: AppTextStyles.button().copyWith(fontSize: 19)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptions({required int columns}) {
-    final part = _parts[_tab];
-    final selected = part.get(_config);
-    return Container(
-      decoration: AppDecorations.card(radius: 30),
-      child: Column(
-        children: [
-          // 꾸밀 곳 고르기: 글자 없이 그림 버튼만
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                for (int i = 0; i < _parts.length; i++)
-                  GestureDetector(
-                    onTap: () => setState(() => _tab = i),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 66,
-                      height: 66,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _tab == i ? AppColors.primary : AppColors.surfaceVariant,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _tab == i ? AppColors.primaryDark : AppColors.border, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _tab == i ? AppColors.primaryDark : AppColors.border,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Text(_parts[i].emoji, style: const TextStyle(fontSize: 32)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.92,
-              ),
-              itemCount: part.count,
-              itemBuilder: (context, i) {
-                final isSelected = i == selected;
-                return GestureDetector(
-                  onTap: () => setState(() => _config = part.set(_config, i)),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primaryLight : AppColors.inputFill,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: isSelected ? AppColors.primary : AppColors.border, width: isSelected ? 4 : 2),
-                      boxShadow: [
-                        BoxShadow(color: isSelected ? AppColors.primaryDark : AppColors.border, offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: Stack(
+                  DhPatch(
+                    const Rect.fromLTRB(92, 205, 548, 792),
+                    const Color(0xF2FFE9A8),
+                    radius: 40,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Positioned.fill(child: CustomPaint(painter: AvatarPainter(part.set(_config, i)))),
-                        if (isSelected)
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Container(
-                              width: 28,
-                              height: 28,
-                              decoration: const BoxDecoration(color: AppColors.secondaryDark, shape: BoxShape.circle),
-                              child: const Icon(Icons.check_rounded, size: 20, color: Colors.white),
-                            ),
-                          ),
+                        Image.asset(CrayongImages.main, height: 170),
+                        const SizedBox(height: 18),
+                        const SizedBox(
+                          width: 220,
+                          child: LinearProgressIndicator(minHeight: 9, borderRadius: BorderRadius.all(Radius.circular(5))),
+                        ),
+                        const SizedBox(height: 16),
+                        Text('닮은 점을 찾고 있어…', style: dhText(36)),
                       ],
                     ),
                   ),
-                );
-              },
+
+                // 꾸밀 곳 탭: 고른 탭은 노란 동그라미
+                for (int i = 0; i < _parts.length; i++)
+                    Positioned.fromRect(
+                      rect: Rect.fromCircle(center: Offset(_tabX[i], 205), radius: 59),
+                      child: IgnorePointer(
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: i == _tab ? const Color(0xFFFFCB3D) : const Color(0xFFFFF0DA),
+                            border: Border.all(color: i == _tab ? const Color(0xFFE3A520) : const Color(0xFFE3C79E), width: 4),
+                          ),
+                          child: DhIcon(_parts[i].icon, size: 74),
+                        ),
+                      ),
+                    ),
+                for (int i = 0; i < _parts.length; i++)
+                  DhHit(Rect.fromCircle(center: Offset(_tabX[i], 205), radius: 62), _parts[i].label, () => setState(() => _tab = i), radius: 62),
+
+                // 보기 카드
+                for (int i = 0; i < part.count && i < 8; i++)
+                  Positioned.fromRect(
+                    rect: _cardRect(i).deflate(3),
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: dhFrame(i == selected ? 'slot_selected' : 'gallery_slot', scale: 2),
+                        padding: const EdgeInsets.fromLTRB(8, 6, 8, 14),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(child: CustomPaint(painter: AvatarPainter(part.set(_config, i)))),
+                            if (i == selected) const Positioned(top: 2, right: 2, child: DhIcon('check_green', size: 50)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                for (int i = 0; i < part.count && i < 8; i++)
+                  DhHit(
+                    _cardRect(i),
+                    '${part.label} ${i + 1}번${i == selected ? ', 선택됨' : ''}',
+                    () => setState(() => _config = part.set(_config, i)),
+                    radius: 30,
+                  ),
+
+                // 누르는 자리들
+                DhHit(const Rect.fromLTRB(22, 30, 125, 120), '뒤로 가기', () => Navigator.pop(context), radius: 48),
+                DhHit(const Rect.fromLTRB(1275, 30, 1572, 126), '다 됐어, 주인공 완성', _finishing ? null : _finish, radius: 48),
+                DhHit(const Rect.fromLTRB(55, 803, 348, 902), '사진으로 닮게', _analyzing ? null : _matchFromPhoto, radius: 46),
+                DhHit(const Rect.fromLTRB(352, 803, 577, 902), '아무거나', _analyzing ? null : _randomize, radius: 46),
+              ],
             ),
           ),
         ],

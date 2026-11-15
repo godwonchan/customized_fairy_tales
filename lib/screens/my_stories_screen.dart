@@ -141,7 +141,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen>
     final counts = [allItems.length, _myStories.length, favoritesList.length];
     final canPop = Navigator.of(context).canPop();
 
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,

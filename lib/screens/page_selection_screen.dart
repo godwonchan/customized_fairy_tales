@@ -127,7 +127,7 @@ class _PageSelectionScreenState extends State<PageSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 700;
-    return Scaffold(
+    return ToyScaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
